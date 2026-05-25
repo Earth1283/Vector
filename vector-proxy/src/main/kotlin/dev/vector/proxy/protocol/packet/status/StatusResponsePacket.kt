@@ -1,5 +1,6 @@
 package dev.vector.proxy.protocol.packet.status
 
+import dev.vector.proxy.network.SessionHandler
 import dev.vector.proxy.protocol.ProtocolVersion
 import dev.vector.proxy.protocol.packet.MinecraftPacket
 import dev.vector.proxy.protocol.util.readString
@@ -14,4 +15,6 @@ class StatusResponsePacket(var json: String = "") : MinecraftPacket {
     override fun encode(buf: ByteBuf, version: ProtocolVersion) {
         buf.writeString(json)
     }
+
+    override fun handle(handler: SessionHandler) = handler.handle(this)
 }

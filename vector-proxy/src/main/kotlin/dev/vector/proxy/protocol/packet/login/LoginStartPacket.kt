@@ -1,5 +1,6 @@
 package dev.vector.proxy.protocol.packet.login
 
+import dev.vector.proxy.network.SessionHandler
 import dev.vector.proxy.protocol.ProtocolVersion
 import dev.vector.proxy.protocol.packet.MinecraftPacket
 import dev.vector.proxy.protocol.util.readString
@@ -31,4 +32,6 @@ class LoginStartPacket : MinecraftPacket {
             buf.writeUUID(uuid ?: UUID.nameUUIDFromBytes("OfflinePlayer:$username".toByteArray()))
         }
     }
+
+    override fun handle(handler: SessionHandler) = handler.handle(this)
 }

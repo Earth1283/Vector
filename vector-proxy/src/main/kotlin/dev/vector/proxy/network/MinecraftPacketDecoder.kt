@@ -1,5 +1,6 @@
 package dev.vector.proxy.network
 
+import dev.vector.proxy.protocol.Direction
 import dev.vector.proxy.protocol.ProtocolState
 import dev.vector.proxy.protocol.ProtocolVersion
 import dev.vector.proxy.protocol.StateRegistry
@@ -8,7 +9,9 @@ import io.netty.buffer.ByteBuf
 import io.netty.channel.ChannelHandlerContext
 import io.netty.handler.codec.MessageToMessageDecoder
 
-class MinecraftPacketDecoder : MessageToMessageDecoder<ByteBuf>() {
+class MinecraftPacketDecoder(
+    private val direction: Direction = Direction.SERVERBOUND,
+) : MessageToMessageDecoder<ByteBuf>() {
     @Volatile var state: ProtocolState = ProtocolState.HANDSHAKING
     @Volatile var protocolVersion: ProtocolVersion = ProtocolVersion.UNKNOWN
 
@@ -18,7 +21,9 @@ class MinecraftPacketDecoder : MessageToMessageDecoder<ByteBuf>() {
         val effectiveVersion = if (protocolVersion == ProtocolVersion.UNKNOWN)
             ProtocolVersion.MINIMUM else protocolVersion
 
-        val factory = StateRegistry.serverbound(state).getFactory(packetId, effectiveVersion) ?: return
+        val registry = if (direction == Direction.SERVERBOUND) StateRegistry.serverbound(state)
+                       else StateRegistry.clientbound(state)
+        val factory = registry.getFactory(packetId, effectiveVersion) ?: return
 
         val packet = factory()
         packet.decode(buf, effectiveVersion)

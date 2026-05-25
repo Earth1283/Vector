@@ -1,6 +1,7 @@
 package dev.vector.proxy.protocol.packet.login
 
 import dev.vector.proxy.model.GameProfile
+import dev.vector.proxy.network.SessionHandler
 import dev.vector.proxy.protocol.ProtocolVersion
 import dev.vector.proxy.protocol.packet.MinecraftPacket
 import dev.vector.proxy.protocol.util.readString
@@ -55,6 +56,8 @@ class LoginSuccessPacket(
             }
         }
     }
+
+    override fun handle(handler: SessionHandler) = handler.handle(this)
 
     companion object {
         fun from(profile: GameProfile, version: ProtocolVersion) = LoginSuccessPacket(

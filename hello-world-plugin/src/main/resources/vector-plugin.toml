@@ -1,0 +1,6 @@
+id = "hello-world"
+name = "Hello World"
+version = "1.0.0"
+api-version = "1.0"
+entrypoint = "dev.vector.example.HelloWorldPlugin"
+language = "KOTLIN"

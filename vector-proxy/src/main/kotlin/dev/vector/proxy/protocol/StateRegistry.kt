@@ -4,9 +4,13 @@ import dev.vector.proxy.protocol.ProtocolVersion.MINECRAFT_1_7_2
 import dev.vector.proxy.protocol.packet.handshake.HandshakePacket
 import dev.vector.proxy.protocol.packet.login.EncryptionRequestPacket
 import dev.vector.proxy.protocol.packet.login.EncryptionResponsePacket
+import dev.vector.proxy.protocol.packet.login.LoginAcknowledgedPacket
 import dev.vector.proxy.protocol.packet.login.LoginDisconnectPacket
+import dev.vector.proxy.protocol.packet.login.LoginPluginMessagePacket
+import dev.vector.proxy.protocol.packet.login.LoginPluginResponsePacket
 import dev.vector.proxy.protocol.packet.login.LoginStartPacket
 import dev.vector.proxy.protocol.packet.login.LoginSuccessPacket
+import dev.vector.proxy.protocol.packet.login.SetCompressionPacket
 import dev.vector.proxy.protocol.packet.status.PingRequestPacket
 import dev.vector.proxy.protocol.packet.status.PingResponsePacket
 import dev.vector.proxy.protocol.packet.status.StatusRequestPacket
@@ -22,8 +26,10 @@ object StateRegistry {
             register(PingRequestPacket::class, MINECRAFT_1_7_2, 0x01) { PingRequestPacket() }
         },
         ProtocolState.LOGIN to DirectionRegistry().apply {
-            register(LoginStartPacket::class,        MINECRAFT_1_7_2, 0x00) { LoginStartPacket() }
-            register(EncryptionResponsePacket::class, MINECRAFT_1_7_2, 0x01) { EncryptionResponsePacket() }
+            register(LoginStartPacket::class,           MINECRAFT_1_7_2, 0x00) { LoginStartPacket() }
+            register(EncryptionResponsePacket::class,   MINECRAFT_1_7_2, 0x01) { EncryptionResponsePacket() }
+            register(LoginPluginResponsePacket::class,  MINECRAFT_1_7_2, 0x02) { LoginPluginResponsePacket() }
+            register(LoginAcknowledgedPacket::class,    MINECRAFT_1_7_2, 0x03) { LoginAcknowledgedPacket() }
         },
     )
 
@@ -33,9 +39,11 @@ object StateRegistry {
             register(PingResponsePacket::class,   MINECRAFT_1_7_2, 0x01) { PingResponsePacket() }
         },
         ProtocolState.LOGIN to DirectionRegistry().apply {
-            register(LoginDisconnectPacket::class,   MINECRAFT_1_7_2, 0x00) { LoginDisconnectPacket() }
-            register(LoginSuccessPacket::class,      MINECRAFT_1_7_2, 0x02) { LoginSuccessPacket() }
-            register(EncryptionRequestPacket::class, MINECRAFT_1_7_2, 0x01) { EncryptionRequestPacket() }
+            register(LoginDisconnectPacket::class,    MINECRAFT_1_7_2, 0x00) { LoginDisconnectPacket() }
+            register(EncryptionRequestPacket::class,  MINECRAFT_1_7_2, 0x01) { EncryptionRequestPacket() }
+            register(LoginSuccessPacket::class,       MINECRAFT_1_7_2, 0x02) { LoginSuccessPacket() }
+            register(SetCompressionPacket::class,     MINECRAFT_1_7_2, 0x03) { SetCompressionPacket() }
+            register(LoginPluginMessagePacket::class, MINECRAFT_1_7_2, 0x04) { LoginPluginMessagePacket() }
         },
     )
 

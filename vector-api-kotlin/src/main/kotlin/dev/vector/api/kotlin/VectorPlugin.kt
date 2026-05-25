@@ -1,7 +1,7 @@
 package dev.vector.api.kotlin
 
-abstract class VectorPlugin(block: VectorPlugin.() -> Unit) {
-    init {
-        block()
+open class VectorPlugin(private val init: VectorPluginScope.() -> Unit) {
+    fun enable(scope: VectorPluginScope) {
+        scope.init()
     }
 }

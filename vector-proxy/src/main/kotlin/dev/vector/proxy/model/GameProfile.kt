@@ -1,5 +1,6 @@
 package dev.vector.proxy.model
 
+import kotlinx.serialization.Serializable
 import java.util.UUID
 
 data class GameProfile(
@@ -8,6 +9,7 @@ data class GameProfile(
     val properties: List<ProfileProperty> = emptyList(),
 )
 
+@Serializable
 data class ProfileProperty(
     val name: String,
     val value: String,

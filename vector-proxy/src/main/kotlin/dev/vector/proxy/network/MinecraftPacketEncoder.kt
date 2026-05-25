@@ -1,5 +1,6 @@
 package dev.vector.proxy.network
 
+import dev.vector.proxy.protocol.Direction
 import dev.vector.proxy.protocol.ProtocolState
 import dev.vector.proxy.protocol.ProtocolVersion
 import dev.vector.proxy.protocol.StateRegistry
@@ -9,7 +10,9 @@ import io.netty.buffer.ByteBuf
 import io.netty.channel.ChannelHandlerContext
 import io.netty.handler.codec.MessageToByteEncoder
 
-class MinecraftPacketEncoder : MessageToByteEncoder<MinecraftPacket>() {
+class MinecraftPacketEncoder(
+    private val direction: Direction = Direction.CLIENTBOUND,
+) : MessageToByteEncoder<MinecraftPacket>() {
     @Volatile var state: ProtocolState = ProtocolState.HANDSHAKING
     @Volatile var protocolVersion: ProtocolVersion = ProtocolVersion.UNKNOWN
 
@@ -17,19 +20,14 @@ class MinecraftPacketEncoder : MessageToByteEncoder<MinecraftPacket>() {
         val effectiveVersion = if (protocolVersion == ProtocolVersion.UNKNOWN)
             ProtocolVersion.MINIMUM else protocolVersion
 
-        val packetId = StateRegistry.clientbound(state).getPacketId(msg::class, effectiveVersion)
+        val registry = if (direction == Direction.CLIENTBOUND) StateRegistry.clientbound(state)
+                       else StateRegistry.serverbound(state)
+        val packetId = registry.getPacketId(msg::class, effectiveVersion)
             ?: throw IllegalStateException(
                 "No packet ID for ${msg::class.simpleName} in state=$state version=${effectiveVersion.versionString}"
             )
 
-        val packetBuf = ctx.alloc().buffer()
-        try {
-            packetBuf.writeVarInt(packetId)
-            msg.encode(packetBuf, effectiveVersion)
-            out.writeVarInt(packetBuf.readableBytes())
-            out.writeBytes(packetBuf)
-        } finally {
-            packetBuf.release()
-        }
+        out.writeVarInt(packetId)
+        msg.encode(out, effectiveVersion)
     }
 }

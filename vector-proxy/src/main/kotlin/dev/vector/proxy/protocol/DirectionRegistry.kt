@@ -19,9 +19,17 @@ class DirectionRegistry {
         byClass.getOrPut(sinceVersion.protocol) { mutableMapOf() }[clazz] = id
     }
 
-    fun getFactory(packetId: Int, version: ProtocolVersion): (() -> MinecraftPacket)? =
-        byId.floorEntry(version.protocol)?.value?.get(packetId)
+    // Walk all registered versions ≤ requested in ascending order; later entries override earlier.
+    // This lets us register a new packet ID at a higher version without losing lower-version entries.
+    fun getFactory(packetId: Int, version: ProtocolVersion): (() -> MinecraftPacket)? {
+        var result: (() -> MinecraftPacket)? = null
+        byId.headMap(version.protocol, true).values.forEach { map -> map[packetId]?.also { result = it } }
+        return result
+    }
 
-    fun getPacketId(clazz: KClass<*>, version: ProtocolVersion): Int? =
-        byClass.floorEntry(version.protocol)?.value?.get(clazz)
+    fun getPacketId(clazz: KClass<*>, version: ProtocolVersion): Int? {
+        var result: Int? = null
+        byClass.headMap(version.protocol, true).values.forEach { map -> map[clazz]?.also { result = it } }
+        return result
+    }
 }
