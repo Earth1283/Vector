@@ -23,7 +23,30 @@
 hs_err_pid*
 replay_pid*
 
-# other weird stuff
+# Gradle
+.gradle/
+**/build/
+gradle-app.setting
+!gradle-wrapper.jar
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# VS Code
+.vscode/
+
+# Sphinx docs build
+docs/_build/
+
+# OS
 .DS_Store
+Thumbs.db
+
+# other
 roadmap.md
 Velocity/
+.claude/
