@@ -5,6 +5,7 @@ import dev.vector.proxy.model.VectorPlayer
 import dev.vector.proxy.network.BackendConnection
 import dev.vector.proxy.network.MinecraftConnection
 import dev.vector.proxy.network.PlayerDataForwarding
+import dev.vector.proxy.network.PlayerState
 import dev.vector.proxy.network.SessionHandler
 import dev.vector.proxy.protocol.ProtocolState
 import dev.vector.proxy.protocol.ProtocolVersion
@@ -141,6 +142,7 @@ class BackendLoginSessionHandler(
     private fun swapToForwarding() {
         logger.info("Forwarding {} <-> {}", player.connection.remoteAddress, backendConnection.serverInfo.name)
 
+        player.connection.transitionState(PlayerState.InServer(backendConnection.serverInfo.name))
         player.currentServerInfo = backendConnection.serverInfo
         player.currentBackendConn = backendConn
 

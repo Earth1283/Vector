@@ -1,6 +1,7 @@
 package dev.vector.proxy.network.session
 
 import dev.vector.proxy.network.MinecraftConnection
+import dev.vector.proxy.network.PlayerState
 import dev.vector.proxy.network.SessionHandler
 import dev.vector.proxy.protocol.ProtocolState
 import dev.vector.proxy.protocol.ProtocolVersion
@@ -18,6 +19,7 @@ class HandshakeSessionHandler(
                 connection.setSessionHandler(StatusSessionHandler(connection))
             }
             2 -> {
+                connection.transitionState(PlayerState.LoggingIn)
                 connection.setState(ProtocolState.LOGIN)
                 connection.setSessionHandler(LoginSessionHandler(connection))
             }

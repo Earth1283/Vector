@@ -4,6 +4,7 @@ import dev.vector.proxy.crypto.MojangAuth
 import dev.vector.proxy.model.VectorPlayer
 import dev.vector.proxy.network.BackendConnection
 import dev.vector.proxy.network.MinecraftConnection
+import dev.vector.proxy.network.PlayerState
 import dev.vector.proxy.network.SessionHandler
 import dev.vector.proxy.protocol.packet.login.LoginDisconnectPacket
 import dev.vector.proxy.protocol.packet.login.SetCompressionPacket
@@ -24,6 +25,7 @@ class AuthSessionHandler(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun activated() {
+        connection.transitionState(PlayerState.Authenticating)
         scope.launch {
             val profile = MojangAuth.verify(username, serverHash)
             connection.channel.eventLoop().execute {

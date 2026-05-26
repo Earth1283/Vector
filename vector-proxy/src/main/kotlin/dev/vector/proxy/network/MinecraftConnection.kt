@@ -25,19 +25,23 @@ class MinecraftConnection(val channel: Channel, val server: VectorServer? = null
     var state: ProtocolState = ProtocolState.HANDSHAKING
         private set
 
+    @Volatile var playerState: PlayerState = PlayerState.Handshaking
+        private set
+
     private var sessionHandler: SessionHandler? = null
     private var knownDisconnect = false
 
     val isClosed: Boolean get() = !channel.isActive
     val remoteAddress: SocketAddress get() = channel.remoteAddress()
 
-    // ── Netty callbacks ───────────────────────────────────────────────────────
+    // -- Netty callbacks -------------------------------------------------------
 
     override fun channelActive(ctx: ChannelHandlerContext) {
         sessionHandler?.connected()
     }
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
+        transitionState(PlayerState.Disconnecting)
         sessionHandler?.disconnected()
     }
 
@@ -64,7 +68,7 @@ class MinecraftConnection(val channel: Channel, val server: VectorServer? = null
         }
     }
 
-    // ── Session handler ───────────────────────────────────────────────────────
+    // -- Session handler -------------------------------------------------------
 
     fun setSessionHandler(handler: SessionHandler) {
         sessionHandler?.deactivated()
@@ -72,7 +76,12 @@ class MinecraftConnection(val channel: Channel, val server: VectorServer? = null
         handler.activated()
     }
 
-    // ── State / protocol version ──────────────────────────────────────────────
+    fun transitionState(next: PlayerState) {
+        if (playerState is PlayerState.Disconnecting) return
+        playerState = playerState.transition(next)
+    }
+
+    // -- State / protocol version ----------------------------------------------
 
     fun setState(next: ProtocolState) {
         state = next
@@ -86,7 +95,7 @@ class MinecraftConnection(val channel: Channel, val server: VectorServer? = null
         channel.pipeline().get(MinecraftPacketEncoder::class.java)?.protocolVersion = version
     }
 
-    // ── Pipeline mutations ────────────────────────────────────────────────────
+    // -- Pipeline mutations ----------------------------------------------------
 
     fun enableEncryption(sharedSecret: ByteArray) {
         val dec = CryptoUtils.createCipher(Cipher.DECRYPT_MODE, sharedSecret)
@@ -101,7 +110,7 @@ class MinecraftConnection(val channel: Channel, val server: VectorServer? = null
         channel.pipeline().replace("frame-encoder", "compress-encoder", MinecraftCompressEncoder(threshold))
     }
 
-    // ── Write helpers ─────────────────────────────────────────────────────────
+    // -- Write helpers ---------------------------------------------------------
 
     fun write(packet: MinecraftPacket) {
         if (channel.isActive) channel.writeAndFlush(packet)
@@ -130,7 +139,7 @@ class MinecraftConnection(val channel: Channel, val server: VectorServer? = null
         }
     }
 
-    // ── AutoRead ──────────────────────────────────────────────────────────────
+    // -- AutoRead --------------------------------------------------------------
 
     fun setAutoReading(autoReading: Boolean) {
         channel.config().isAutoRead = autoReading

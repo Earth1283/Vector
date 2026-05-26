@@ -1,0 +1,6 @@
+<configuration>
+    <appender name="JLINE" class="dev.vector.proxy.console.JLineAppender"/>
+    <root level="INFO">
+        <appender-ref ref="JLINE"/>
+    </root>
+</configuration>

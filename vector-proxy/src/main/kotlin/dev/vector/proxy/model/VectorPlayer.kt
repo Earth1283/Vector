@@ -2,6 +2,7 @@ package dev.vector.proxy.model
 
 import dev.vector.proxy.VectorServer
 import dev.vector.proxy.network.MinecraftConnection
+import dev.vector.proxy.network.PlayerState
 import dev.vector.proxy.protocol.ProtocolVersion
 import java.util.UUID
 
@@ -14,6 +15,7 @@ class VectorPlayer(
     override val uuid: UUID get() = profile.uuid
     override val username: String get() = profile.username
     val protocolVersion: ProtocolVersion get() = connection.protocolVersion
+    val playerState: PlayerState get() = connection.playerState
 
     var currentServerInfo: BackendServerInfo? = null
     var currentBackendConn: MinecraftConnection? = null

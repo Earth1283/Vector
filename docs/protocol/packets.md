@@ -163,7 +163,7 @@ The backend sends `LoginPluginMessage(channel="velocity:player_info")`. The
 proxy responds with a binary payload signed with HMAC-SHA256:
 
 ```
-┌────────────────────────────────────────────────────────────┐
+┌------------------------------------------------------------┐
 │  HMAC-SHA256 signature (32 bytes)                          │
 │  Forwarding version (VarInt)                               │
 │  Player IP (String)                                        │
@@ -171,7 +171,7 @@ proxy responds with a binary payload signed with HMAC-SHA256:
 │  Player username (String)                                  │
 │  Profile properties count (VarInt)                         │
 │  [For each property: name, value, signed, signature]       │
-└────────────────────────────────────────────────────────────┘
+└------------------------------------------------------------┘
 ```
 
 The HMAC key is the `forwarding.secret` from `vector.toml`. The backend

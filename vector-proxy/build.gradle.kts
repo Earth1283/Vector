@@ -28,6 +28,6 @@ dependencies {
     implementation("org.jetbrains.exposed:exposed-core:0.52.0")
     implementation("org.jetbrains.exposed:exposed-jdbc:0.52.0")
 
-    runtimeOnly("ch.qos.logback:logback-classic:1.5.6")
+    implementation("ch.qos.logback:logback-classic:1.5.6")
     runtimeOnly("org.xerial:sqlite-jdbc:3.46.0.0")
 }

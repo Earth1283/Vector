@@ -11,9 +11,9 @@ packet-level decoding occurs.
 ### Without compression
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
+┌----------------------------------------------------------------------┐
 │  Length (VarInt)  │  Packet ID (VarInt)  │  Payload (Length-1 bytes) │
-└──────────────────────────────────────────────────────────────────────┘
+└----------------------------------------------------------------------┘
      ↑
      Byte count of (Packet ID + Payload). Does NOT include itself.
 ```
@@ -21,9 +21,9 @@ packet-level decoding occurs.
 ### With compression (enabled by `SetCompressionPacket` during Login)
 
 ```
-┌────────────────────────────────────────────────────────────────────────────────┐
+┌--------------------------------------------------------------------------------┐
 │  Packet Length (VarInt)  │  Data Length (VarInt)  │  Data (compressed or raw)  │
-└────────────────────────────────────────────────────────────────────────────────┘
+└--------------------------------------------------------------------------------┘
        ↑                          ↑
        Byte count of              0  → packet payload is sent uncompressed
        (DataLength + Data)            (below threshold, usually 256 bytes)
@@ -63,10 +63,10 @@ data bits; the most-significant bit signals whether more bytes follow.
 
 ```
 Bit layout of each byte:
-┌───────┬──────────────────────┐
+┌-------┬----------------------┐
 │  MSB  │    7 data bits       │
 │  0/1  │  b6 b5 b4 b3 b2 b1 b0│
-└───────┴──────────────────────┘
+└-------┴----------------------┘
    ↑
    1 = another byte follows
    0 = this is the last byte

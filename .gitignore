@@ -51,3 +51,5 @@ roadmap.md
 Velocity/
 .claude/
 venv/
+vector.toml
+.kotlin/

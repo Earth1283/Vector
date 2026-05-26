@@ -20,14 +20,14 @@ class HelloWorldPlugin : VectorPlugin({
     val sessions = ConcurrentHashMap<UUID, Instant>()
     val totalJoins = AtomicLong(0)
 
-    // ── Lifecycle ────────────────────────────────────────────────────────────
+    // -- Lifecycle ------------------------------------------------------------
 
     onEnable {
         logger.info("Hello from Vector! Running proxy v{}", server.version)
         logger.info("{} player(s) online at startup", server.players.size)
     }
 
-    // ── Join handling ────────────────────────────────────────────────────────
+    // -- Join handling --------------------------------------------------------
 
     on<PlayerJoinEvent> { event ->
         val player = event.player
@@ -52,7 +52,7 @@ class HelloWorldPlugin : VectorPlugin({
         logger.debug("[monitor] join pipeline complete for {}", event.player.username)
     }
 
-    // ── Leave handling ───────────────────────────────────────────────────────
+    // -- Leave handling -------------------------------------------------------
 
     on<PlayerLeaveEvent> { event ->
         val player = event.player

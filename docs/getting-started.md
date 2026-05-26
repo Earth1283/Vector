@@ -170,7 +170,13 @@ sequenceDiagram
 | 5.2 | VectorServer + VectorPlayer + ServerRegistry | ✓ |
 | 5.3 | Packet compression + player-info forwarding | ✓ |
 | 6 | Plugin loader boots, loads hello-world plugin | ✓ |
-| 7 | Everything else: console, cluster, MOTD, storage | ← next |
+| 7.1 | Full player state machine (compiler-enforced transitions) | ✓ |
+| 7.2 | jline3 console — theme DSL, frecency autocomplete, ghost text | ✓ |
+| 7.3 | Plugin lifecycle: onDisable, command DSL, scheduled tasks | ← next |
+| 7.4 | Storage — SQLite, Flyway migrations, pluggable backends | |
+| 7.5 | MOTD + full configuration system | |
+| 7.6 | Cluster + Limbo | |
+| 7.7 | Velocity compat wiring + VecTest suite | |
 
 ---
 
