@@ -25,6 +25,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.jline.utils.AttributedStringBuilder
@@ -33,6 +34,8 @@ import org.slf4j.LoggerFactory
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.file.Paths
+import kotlin.io.path.createDirectories
+import kotlin.io.path.exists
 import java.security.KeyPair
 import java.time.Duration
 import java.time.Instant
@@ -416,6 +419,17 @@ class VectorServer(val config: VectorConfig, val console: ProxyConsole? = null) 
     fun start() {
         startTime = Instant.now()
 
+        val folderJob = proxyScope.launch {
+            val pluginsDir = Paths.get("plugins")
+            if (!pluginsDir.exists()) {
+                try {
+                    pluginsDir.createDirectories()
+                } catch (e: Exception) {
+                    logger.error("Failed to create plugins/ directory: {}", e.message)
+                }
+            }
+        }
+
         val bindAddr = run {
             val colon = config.bind.lastIndexOf(':')
             val (host, port) = if (colon != -1) {
@@ -453,6 +467,7 @@ class VectorServer(val config: VectorConfig, val console: ProxyConsole? = null) 
 
             pluginManager = PluginManager(this)
             runBlocking {
+                folderJob.join()
                 pluginManager.loadPlugins(Paths.get("plugins"))
                 eventBus.fire(ProxyInitializeEvent())
             }
