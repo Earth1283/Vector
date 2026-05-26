@@ -19,6 +19,12 @@ an AGPL-3.0 license.
 
 .. toctree::
    :maxdepth: 2
+   :caption: Administration
+
+   administration/index
+
+.. toctree::
+   :maxdepth: 2
    :caption: Internals
 
    architecture/index

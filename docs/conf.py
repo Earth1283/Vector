@@ -5,23 +5,14 @@ release = "1.0.0-SNAPSHOT"
 
 extensions = [
     "sphinx_copybutton",
-    "myst_parser",
     "sphinxcontrib.mermaid",
 ]
-
-myst_enable_extensions = [
-    "colon_fence",
-    "deflist",
-]
-
-myst_fence_as_directive = ["mermaid"]
 
 mermaid_version = "11.4.0"
 
 templates_path = ["_templates"]
 source_suffix = {
     ".rst": "restructuredtext",
-    ".md": "markdown",
 }
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
