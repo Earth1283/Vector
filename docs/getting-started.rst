@@ -141,16 +141,16 @@ What Happens at Startup
 .. mermaid::
 
    flowchart TD
-       Main([main]) --> LoadCfg[Load / generate\nvector.toml]
-       LoadCfg --> KeyPair[Generate RSA key pair\nfor online-mode auth]
-       KeyPair --> ParseServers[Parse servers map\nfrom config]
-       ParseServers --> NettyBind[Netty bind\nboss + worker groups\nepoll / kqueue / NIO]
-       NettyBind --> Plugins[PluginManager.loadPlugins\nscan plugins/ dir]
-       Plugins --> Waves[Compute load waves\nrespecting hard-deps]
-       Waves --> Parallel[Parallel instantiate\nwithin each wave]
-       Parallel --> Enable[Sequential enable\nruns VectorPlugin blocks]
-       Enable --> InitEvent[fire ProxyInitializeEvent\nonEnable handlers run]
-       InitEvent --> Accept([Accept connections])
+       Main([main]) --> LoadCfg["Load / generate\nvector.toml"]
+       LoadCfg --> KeyPair["Generate RSA key pair\nfor online-mode auth"]
+       KeyPair --> ParseServers["Parse servers map\nfrom config"]
+       ParseServers --> NettyBind["Netty bind\nboss + worker groups\nepoll / kqueue / NIO"]
+       NettyBind --> Plugins["PluginManager.loadPlugins\nscan plugins/ dir"]
+       Plugins --> Waves["Compute load waves\nrespecting hard-deps"]
+       Waves --> Parallel["Parallel instantiate\nwithin each wave"]
+       Parallel --> Enable["Sequential enable\nruns VectorPlugin blocks"]
+       Enable --> InitEvent["fire ProxyInitializeEvent\nonEnable handlers run"]
+       InitEvent --> Accept(["Accept connections"])
 
 Connecting Your First Client
 -----------------------------
@@ -177,7 +177,10 @@ Connecting Your First Client
        B-->>P: LoginSuccess
        P-->>C: LoginSuccess (+ SetCompression)
        Note over P,C: packet codec removed, raw forwarding starts
-       C<-->>P<-->>B: Play packets forwarded transparently
+       C->>P: Play packets
+       P->>B: Forwarded transparently
+       B->>P: Play packets
+       P->>C: Forwarded transparently
 
 Build Order
 -----------
