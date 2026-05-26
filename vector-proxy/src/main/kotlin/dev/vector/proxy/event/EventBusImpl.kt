@@ -25,17 +25,26 @@ class EventBusImpl : EventBus {
         priority: EventPriority,
         handler: suspend (T) -> Unit,
     ) {
-        handlers.getOrPut(eventClass) { CopyOnWriteArrayList() }
-            .add(HandlerEntry(pluginId, priority, handler as suspend (Any) -> Unit))
+        synchronized(handlers) {
+            val list = handlers.getOrPut(eventClass) { CopyOnWriteArrayList() }
+            list.add(HandlerEntry(pluginId, priority, handler as suspend (Any) -> Unit))
+            val sorted = list.sortedBy { it.priority }
+            handlers[eventClass] = CopyOnWriteArrayList(sorted)
+        }
     }
 
     override fun unregisterAll(pluginId: String) {
-        handlers.values.forEach { list -> list.removeIf { it.pluginId == pluginId } }
+        synchronized(handlers) {
+            handlers.forEach { (eventClass, list) ->
+                val updated = list.filter { it.pluginId != pluginId }
+                handlers[eventClass] = CopyOnWriteArrayList(updated)
+            }
+        }
     }
 
     override suspend fun <T : VectorEvent> fire(event: T): T {
         val list = handlers[event::class] ?: return event
-        for (entry in list.sortedBy { it.priority }) {
+        for (entry in list) {
             if (event is CancellableEvent && event.isCancelled && entry.priority != EventPriority.MONITOR) continue
             entry.handler(event)
         }

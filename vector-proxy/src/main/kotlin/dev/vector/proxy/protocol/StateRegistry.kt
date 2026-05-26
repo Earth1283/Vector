@@ -31,6 +31,8 @@ object StateRegistry {
             register(LoginPluginResponsePacket::class,  MINECRAFT_1_7_2, 0x02) { LoginPluginResponsePacket() }
             register(LoginAcknowledgedPacket::class,    MINECRAFT_1_7_2, 0x03) { LoginAcknowledgedPacket() }
         },
+        ProtocolState.CONFIGURATION to DirectionRegistry(),
+        ProtocolState.PLAY to DirectionRegistry()
     )
 
     private val clientboundRegistries = mapOf(
@@ -45,6 +47,8 @@ object StateRegistry {
             register(SetCompressionPacket::class,     MINECRAFT_1_7_2, 0x03) { SetCompressionPacket() }
             register(LoginPluginMessagePacket::class, MINECRAFT_1_7_2, 0x04) { LoginPluginMessagePacket() }
         },
+        ProtocolState.CONFIGURATION to DirectionRegistry(),
+        ProtocolState.PLAY to DirectionRegistry()
     )
 
     fun serverbound(state: ProtocolState): DirectionRegistry =

@@ -5,11 +5,11 @@ import dev.vector.proxy.model.VectorPlayer
 import dev.vector.proxy.network.session.BackendLoginSessionHandler
 import dev.vector.proxy.protocol.Direction
 
+import dev.vector.proxy.network.NettyTransport
 import io.netty.bootstrap.Bootstrap
 import io.netty.channel.ChannelFutureListener
 import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.SocketChannel
-import io.netty.channel.socket.nio.NioSocketChannel
 import org.slf4j.LoggerFactory
 
 class BackendConnection(
@@ -27,7 +27,7 @@ class BackendConnection(
 
         Bootstrap()
             .group(clientConn.channel.eventLoop())
-            .channel(NioSocketChannel::class.java)
+            .channel(NettyTransport.clientChannelClass)
             .handler(object : ChannelInitializer<SocketChannel>() {
                 override fun initChannel(ch: SocketChannel) {
                     val backendConn = MinecraftConnection(ch)

@@ -23,7 +23,12 @@ class MinecraftPacketDecoder(
 
         val registry = if (direction == Direction.SERVERBOUND) StateRegistry.serverbound(state)
                        else StateRegistry.clientbound(state)
-        val factory = registry.getFactory(packetId, effectiveVersion) ?: return
+        val factory = registry.getFactory(packetId, effectiveVersion)
+        if (factory == null) {
+            buf.readerIndex(0)
+            out.add(buf.retain())
+            return
+        }
 
         val packet = factory()
         packet.decode(buf, effectiveVersion)

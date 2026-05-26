@@ -8,6 +8,8 @@ import java.util.zip.Inflater
 
 class MinecraftCompressDecoder(val threshold: Int) : MessageToMessageDecoder<ByteBuf>() {
 
+    private val inflater = Inflater()
+
     override fun decode(ctx: ChannelHandlerContext, msg: ByteBuf, out: MutableList<Any>) {
         val dataLength = msg.readVarInt()
         if (dataLength == 0) {
@@ -19,11 +21,16 @@ class MinecraftCompressDecoder(val threshold: Int) : MessageToMessageDecoder<Byt
         }
         val compressed = ByteArray(msg.readableBytes())
         msg.readBytes(compressed)
-        val inflater = Inflater()
+        
         inflater.setInput(compressed)
         val decompressed = ByteArray(dataLength)
         inflater.inflate(decompressed)
-        inflater.end()
+        inflater.reset()
+        
         out.add(ctx.alloc().buffer(dataLength).writeBytes(decompressed))
+    }
+
+    override fun handlerRemoved(ctx: ChannelHandlerContext) {
+        inflater.end()
     }
 }

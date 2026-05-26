@@ -13,12 +13,11 @@ import dev.vector.proxy.network.MinecraftPacketDecoder
 import dev.vector.proxy.network.MinecraftPacketEncoder
 import dev.vector.proxy.network.MinecraftVarintFrameDecoder
 import dev.vector.proxy.network.session.HandshakeSessionHandler
+import dev.vector.proxy.network.NettyTransport
 import dev.vector.proxy.plugin.PluginManager
 import io.netty.bootstrap.ServerBootstrap
 import io.netty.channel.ChannelInitializer
-import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.SocketChannel
-import io.netty.channel.socket.nio.NioServerSocketChannel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -55,7 +54,12 @@ class VectorServer(val config: VectorConfig) : ProxyServer {
 
         servers = config.servers.mapValues { (name, addr) ->
             val colon = addr.lastIndexOf(':')
-            BackendServerInfo(name, InetSocketAddress(addr.substring(0, colon), addr.substring(colon + 1).toInt()))
+            val (host, port) = if (colon != -1) {
+                addr.substring(0, colon) to addr.substring(colon + 1).toInt()
+            } else {
+                addr to 25565
+            }
+            BackendServerInfo(name, InetSocketAddress(host, port))
         }
     }
 
@@ -82,15 +86,20 @@ class VectorServer(val config: VectorConfig) : ProxyServer {
     fun start() {
         val bindAddr = run {
             val colon = config.bind.lastIndexOf(':')
-            InetSocketAddress(config.bind.substring(0, colon), config.bind.substring(colon + 1).toInt())
+            val (host, port) = if (colon != -1) {
+                config.bind.substring(0, colon) to config.bind.substring(colon + 1).toInt()
+            } else {
+                config.bind to 25565
+            }
+            InetSocketAddress(host, port)
         }
 
-        val boss = NioEventLoopGroup(1)
-        val worker = NioEventLoopGroup()
+        val boss = NettyTransport.createEventLoopGroup(1)
+        val worker = NettyTransport.createEventLoopGroup()
         try {
             val bound = ServerBootstrap()
                 .group(boss, worker)
-                .channel(NioServerSocketChannel::class.java)
+                .channel(NettyTransport.serverChannelClass)
                 .childHandler(object : ChannelInitializer<SocketChannel>() {
                     override fun initChannel(ch: SocketChannel) {
                         val conn = MinecraftConnection(ch, this@VectorServer)

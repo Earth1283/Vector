@@ -2,8 +2,29 @@ package dev.vector.proxy.plugin
 
 import java.net.URL
 import java.net.URLClassLoader
+import java.util.concurrent.CopyOnWriteArrayList
 
 class PluginClassLoader(jarUrl: URL, parent: ClassLoader) : URLClassLoader(arrayOf(jarUrl), parent) {
+
+    companion object {
+        private val allLoaders = CopyOnWriteArrayList<PluginClassLoader>()
+
+        fun register(loader: PluginClassLoader) {
+            allLoaders.add(loader)
+        }
+
+        fun unregister(loader: PluginClassLoader) {
+            allLoaders.remove(loader)
+        }
+    }
+
+    init {
+        register(this)
+    }
+
+    fun findClassDirect(name: String): Class<*> {
+        return findClass(name)
+    }
 
     override fun loadClass(name: String, resolve: Boolean): Class<*> {
         if (
@@ -19,13 +40,26 @@ class PluginClassLoader(jarUrl: URL, parent: ClassLoader) : URLClassLoader(array
         }
         synchronized(getClassLoadingLock(name)) {
             findLoadedClass(name)?.let { return it }
-            return try {
+            
+            val selfClass = runCatching {
                 val clazz = findClass(name)
                 if (resolve) resolveClass(clazz)
                 clazz
-            } catch (_: ClassNotFoundException) {
-                super.loadClass(name, resolve)
+            }.getOrNull()
+
+            if (selfClass != null) return selfClass
+
+            for (loader in allLoaders) {
+                if (loader === this) continue
+                try {
+                    val clazz = loader.findClassDirect(name)
+                    if (resolve) resolveClass(clazz)
+                    return clazz
+                } catch (_: ClassNotFoundException) {
+                }
             }
+
+            return super.loadClass(name, resolve)
         }
     }
 }

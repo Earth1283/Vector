@@ -8,3 +8,5 @@ Architecture
    design-decisions
    netty-coroutine-boundary
    player-state-machine
+   event-system
+   plugin-loader
