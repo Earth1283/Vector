@@ -14,6 +14,8 @@ myst_enable_extensions = [
     "deflist",
 ]
 
+myst_fence_as_directive = ["mermaid"]
+
 mermaid_version = "11.4.0"
 
 templates_path = ["_templates"]
