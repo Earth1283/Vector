@@ -110,6 +110,18 @@ then binds and logs:
    INFO  RSA key pair ready
    INFO  Proxy bound on 0.0.0.0:25565
 
+Build a fat JAR
+~~~~~~~~~~~~~~~
+
+.. code-block:: bash
+
+   ./gradlew shadowJar
+   java -jar vector-proxy/build/libs/vector.jar
+
+Produces a single self-contained JAR (~30 MB) with all dependencies
+bundled. No Gradle or JDK installation required on the target machine
+beyond a JRE 21+.
+
 Run from the assembled distribution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

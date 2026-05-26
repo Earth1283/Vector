@@ -2,6 +2,7 @@ plugins {
     kotlin("jvm")
     kotlin("plugin.serialization")
     application
+    id("com.gradleup.shadow")
 }
 
 kotlin {
@@ -30,4 +31,11 @@ dependencies {
 
     implementation("ch.qos.logback:logback-classic:1.5.6")
     runtimeOnly("org.xerial:sqlite-jdbc:3.46.0.0")
+}
+
+tasks.shadowJar {
+    archiveBaseName.set("vector")
+    archiveClassifier.set("")
+    archiveVersion.set("")
+    mergeServiceFiles()
 }
