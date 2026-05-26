@@ -6,4 +6,5 @@ data class PluginContainer(
     val manifest: PluginManifest,
     val instance: Any,
     val scope: CoroutineScope,
+    val classLoader: ClassLoader,
 )

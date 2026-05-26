@@ -38,7 +38,7 @@ class AuthSessionHandler(
 
                 val server = connection.server!!
                 val player = VectorPlayer(profile, connection, server)
-                val initialServer = server.getInitialServer()
+                val initialServer = server.getInitialServer(connection.virtualHost)
                 if (initialServer == null) {
                     connection.closeWith(
                         LoginDisconnectPacket("""{"text":"No backend servers are configured","color":"red"}""")

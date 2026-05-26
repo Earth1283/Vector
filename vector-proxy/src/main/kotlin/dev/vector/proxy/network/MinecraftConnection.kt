@@ -24,6 +24,7 @@ class MinecraftConnection(val channel: Channel, val server: VectorServer? = null
         private set
     var state: ProtocolState = ProtocolState.HANDSHAKING
         private set
+    var virtualHost: String = ""
 
     @Volatile var playerState: PlayerState = PlayerState.Handshaking
         private set

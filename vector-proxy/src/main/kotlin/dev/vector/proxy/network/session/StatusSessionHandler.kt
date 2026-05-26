@@ -13,7 +13,9 @@ class StatusSessionHandler(private val connection: MinecraftConnection) : Sessio
     override fun handle(packet: StatusRequestPacket): Boolean {
         val version = connection.protocolVersion
             .takeUnless { it == ProtocolVersion.UNKNOWN } ?: ProtocolVersion.MAXIMUM
-        connection.write(StatusResponsePacket(buildStatusJson(version)))
+        val json = connection.server?.buildStatusJson(version)
+            ?: fallbackJson(version)
+        connection.write(StatusResponsePacket(json))
         return true
     }
 
@@ -26,6 +28,6 @@ class StatusSessionHandler(private val connection: MinecraftConnection) : Sessio
         connection.close()
     }
 
-    private fun buildStatusJson(version: ProtocolVersion) =
-        """{"version":{"name":"${version.versionString}","protocol":${version.protocol}},"players":{"max":100,"online":0,"sample":[]},"description":{"text":"A Vector Proxy"}}"""
+    private fun fallbackJson(version: ProtocolVersion) =
+        """{"version":{"name":"${version.versionString}","protocol":${version.protocol}},"players":{"max":0,"online":0,"sample":[]},"description":{"text":"Vector"}}"""
 }

@@ -207,7 +207,8 @@ the process exits.
 help
 ----
 
-Print a summary of all available commands.
+Print a summary of all available commands. If any plugins have registered console
+commands (via the ``command { }`` DSL), they are listed below the built-in section.
 
 .. code-block:: text
 
@@ -224,6 +225,9 @@ Print a summary of all available commands.
      version                              — show version and runtime info
      uptime                               — show how long the proxy has been running
      stop                                 — shut down the proxy gracefully
+   Plugin commands:
+     hello  (hello-world)
+     greet  (hello-world)
 
 Tab Completion
 --------------

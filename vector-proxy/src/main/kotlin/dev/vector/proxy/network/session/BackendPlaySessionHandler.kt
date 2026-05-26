@@ -17,7 +17,9 @@ class BackendPlaySessionHandler(private val player: VectorPlayer) : SessionHandl
     }
 
     override fun disconnected() {
-        logger.debug("Backend disconnected for {}", player.username)
+        val action = player.server.config.playerExperience.backendDisconnect
+        logger.debug("Backend disconnected for {} (action={})", player.username, action.action)
+        // send-to-fallback is planned for when Play-phase packet support lands.
         player.connection.close()
     }
 

@@ -1,16 +1,47 @@
 Velocity Compatibility
 ======================
 
-Existing Velocity plugins run unmodified on Vector. Drop a Velocity plugin JAR
-into the ``plugins/`` directory — if it contains a ``velocity-plugin.json`` manifest
-(Velocity's native format), Vector loads it through the compatibility layer
-instead of the native plugin loader.
+Existing Velocity plugins run unmodified on Vector through a shim layer. Drop a
+Velocity plugin JAR into the ``plugins/`` directory — if it contains a
+``velocity-plugin.json`` manifest (Velocity's native format), Vector loads it
+through the compatibility layer instead of the native plugin loader.
 
 .. note::
 
    **Status:** The compat classloader is in ``vector-compat`` and will be wired
    into the plugin loader in Part 7. The shim architecture documented here is
    finalised — only the wiring remains.
+
+Hard Limits
+-----------
+
+.. danger::
+
+   **Reflection into Velocity internals will not work. There are no plans to
+   change this.**
+
+   The compat layer exposes the Velocity API surface (interfaces, annotations,
+   value types). It does **not** ship Velocity's internal implementation classes
+   — ``com.velocitypowered.proxy.*`` and similar internal packages are not on the
+   classpath at all. Any plugin that uses reflection to reach into Velocity
+   implementation classes at runtime will throw ``ClassNotFoundException`` or
+   ``NoSuchMethodException`` and will not be supported.
+
+   This is not a bug. Velocity internals are not part of Velocity's public API
+   contract, and Vector is not Velocity. Plugins that rely on them were already
+   technically unsupported on Velocity itself.
+
+.. danger::
+
+   **Reflection into Vector internals is also unsupported.**
+
+   ``dev.vector.proxy.*`` is not public API. Classes, methods, and fields in that
+   package may be renamed, moved, or removed at any time without notice. Plugins
+   that reach into Vector internals via reflection will break without warning and
+   will receive no compatibility consideration in future releases.
+
+   If you need functionality that is only available via Vector internals, open a
+   feature request so it can be added to ``dev.vector.api``.
 
 How Velocity Plugins are Detected
 ----------------------------------
@@ -153,8 +184,9 @@ Load Log Output
 Compatibility Guarantee
 ------------------------
 
-   If your plugin worked on Velocity 3.x, it works on Vector. This is a hard
-   constraint, not a feature goal.
+   If your plugin used only the Velocity public API (``com.velocitypowered.api.*``)
+   and did not reflect into Velocity or Vector internals, it works on Vector.
+   This is a hard constraint, not a feature goal.
 
 Enforcement:
 

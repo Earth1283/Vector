@@ -15,6 +15,10 @@ Quick Start
            logger.info("Plugin ready! Proxy v{}", server.version)
        }
 
+       onDisable {
+           logger.info("Plugin shutting down.")
+       }
+
        on<PlayerJoinEvent> { event ->
            logger.info("{} joined", event.player.username)
        }
@@ -71,6 +75,9 @@ Plugin Lifecycle
        Enable --> Fire[fire ProxyInitializeEvent\nonEnable handlers run]
        Fire --> Accept([Accept connections])
        Accept --> Events[PlayerJoinEvent\nPlayerLeaveEvent\n...]
+       Events --> Stop([proxy stop])
+       Stop --> Disable["disable() — onDisable\nhandlers run in reverse order"]
+       Disable --> Cleanup[event handlers unregistered\ncommands removed\ncoroutine scope cancelled]
 
 The ``VectorPlugin { }`` constructor argument is a ``VectorPluginScope.() -> Unit``
 lambda. It runs during ``enable()``, not at class construction, which means your
@@ -159,7 +166,6 @@ Handlers are ``suspend`` functions running in the plugin's ``CoroutineScope``:
 .. code-block:: kotlin
 
    on<PlayerJoinEvent> { event ->
-       // launch a fire-and-forget coroutine — crash here won't kill the proxy
        launch {
            delay(3.seconds)
            // send welcome message, query a database, etc.
@@ -178,10 +184,84 @@ priority. Use it for one-time startup work:
        logger.info("Proxy is live with {} players", server.players.size)
    }
 
-Lifecycle Example — Session Tracking
---------------------------------------
+``onDisable``
+-------------
 
-The ``hello-world-plugin`` bundled in the repo demonstrates the full lifecycle:
+``onDisable { }`` registers a teardown handler that runs when the proxy shuts down
+gracefully (``stop`` command) or when plugins are unloaded. Multiple handlers are
+allowed and run in registration order.
+
+.. code-block:: kotlin
+
+   onDisable {
+       logger.info("Flushing cache…")
+       cache.flush()   // suspend-friendly — you can call suspend functions here
+   }
+
+After all ``onDisable`` handlers complete:
+
+1. All event handlers registered by this plugin are removed from the event bus.
+2. All console commands registered by this plugin are removed.
+3. The plugin's coroutine scope is cancelled (all running ``launch`` / ``every``
+   jobs are stopped).
+
+Plugin Commands
+---------------
+
+``command("name") { args -> }`` registers a console command that becomes available
+immediately after the plugin enables. The full ``VectorPluginScope`` is the receiver,
+so ``server``, ``logger``, and coroutine helpers are all in scope.
+
+.. code-block:: kotlin
+
+   command("hello") { args ->
+       val who = args.firstOrNull() ?: "World"
+       logger.info("Hello, {}!", who)
+   }
+
+   command("greet") { args ->
+       val target = args.firstOrNull()
+       if (target == null) {
+           logger.warn("Usage: greet <player>")
+           return@command
+       }
+       val player = server.getPlayer(target)
+       if (player == null) {
+           logger.warn("Player '{}' is not online", target)
+       } else {
+           logger.info("Greeting {} ({})", player.username, player.uuid)
+       }
+   }
+
+The command name appears in tab completion and in ``help`` output under a *Plugin
+commands* section. Commands are unregistered automatically when the plugin disables.
+
+Scheduled Tasks — ``every``
+----------------------------
+
+``every(period) { }`` launches a repeating coroutine that fires once per ``period``,
+starting after the first interval elapses. The returned ``Job`` is a child of the
+plugin's scope and is cancelled automatically when the plugin disables.
+
+.. code-block:: kotlin
+
+   every(30.seconds) {
+       logger.debug("Heartbeat: {} player(s) online", server.players.size)
+   }
+
+   every(5.minutes) {
+       // flush metrics, expire stale sessions, etc.
+   }
+
+The block runs in the plugin's ``CoroutineScope`` (``Dispatchers.Default``), so
+``launch``, ``delay``, and other coroutine primitives work as expected. If the block
+throws, the exception is silently swallowed and the schedule continues — wrap in
+``try/catch`` if you need to handle errors.
+
+Lifecycle Example — Full Plugin
+---------------------------------
+
+The ``hello-world-plugin`` bundled in the repo demonstrates all lifecycle features:
 
 .. code-block:: kotlin
 
@@ -194,6 +274,19 @@ The ``hello-world-plugin`` bundled in the repo demonstrates the full lifecycle:
            logger.info("Hello from Vector! Running proxy v{}", server.version)
        }
 
+       onDisable {
+           logger.info("HelloWorld shutting down ({} total joins this session).", totalJoins.get())
+       }
+
+       every(30.seconds) {
+           logger.debug("Heartbeat: {} player(s) online", server.players.size)
+       }
+
+       command("hello") { args ->
+           val who = args.firstOrNull() ?: "World"
+           logger.info("Hello, {}!", who)
+       }
+
        on<PlayerJoinEvent> { event ->
            sessions[event.player.uuid] = Instant.now()
            val count = totalJoins.incrementAndGet()
@@ -204,10 +297,6 @@ The ``hello-world-plugin`` bundled in the repo demonstrates the full lifecycle:
                delay(2.seconds)
                logger.info("Welcome, {}! You are player #{}.", event.player.username, count)
            }
-       }
-
-       on<PlayerJoinEvent>(priority = EventPriority.MONITOR) { event ->
-           logger.debug("[monitor] join pipeline complete for {}", event.player.username)
        }
 
        on<PlayerLeaveEvent> { event ->
@@ -224,10 +313,11 @@ Key points demonstrated:
 
 - **Shared state**: ``sessions`` and ``totalJoins`` are captured in the lambda
   closure and live for the plugin's lifetime.
-- **Coroutine launch**: ``launch { delay(...) }`` is safe — the ``SupervisorJob``
-  means a crash in the delayed block does not affect other handlers.
-- **MONITOR audit**: runs after all other ``PlayerJoinEvent`` handlers, even
-  if one cancelled.
+- **onDisable**: logs a summary before shutdown; runs before scope cancellation.
+- **every**: the heartbeat job is cancelled automatically on disable.
+- **command**: ``hello`` is available at the proxy console immediately after enable.
+- **launch**: a fire-and-forget coroutine inside an event handler is safe — the
+  ``SupervisorJob`` means a crash in the delayed block does not affect other handlers.
 
 Dependency Ordering
 -------------------

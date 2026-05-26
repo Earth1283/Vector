@@ -7,30 +7,145 @@ default ``vector.toml`` to the working directory if the file does not exist.
 Current Implemented Config
 --------------------------
 
-This is the full schema that is **active today** (Parts 1–7.2):
+This is the full schema **active today** (Parts 1–7.5). The file below is
+what Vector writes to ``vector.toml`` on first start — every option is
+commented in place so the file is self-documenting. You do not need this
+page to configure the proxy; it exists for quick reference.
 
 .. code-block:: toml
 
-   # Address the proxy listens on. Format: "host:port"
+   # Address the proxy binds to. Format: "host:port"
+   # Use 0.0.0.0 to listen on all interfaces, or a specific IP to restrict.
    bind = "0.0.0.0:25565"
+   # bind = "192.168.1.10:25565"   # bind to a specific NIC only
 
-   # Backend servers: name → "host:port"
+   # Backend servers the proxy can route players to. Format: name = "host:port"
+   # Add as many entries as you need; names are referenced in [routing] and
+   # [management.forced-hosts]. Each server must run in offline mode.
    [servers]
-   lobby = "localhost:25577"
+   lobby    = "localhost:25577"
+   # survival  = "localhost:25578"
+   # creative  = "10.0.0.5:25577"
+   # minigames = "minigames.internal:25565"
 
-   # Which server(s) to try when a player first connects.
-   # Tried in order; first reachable one wins.
+   # Controls which server(s) a player is sent to on first connect.
+   # Entries are tried in order; the first one that accepts the connection wins.
+   # All names must match keys in [servers].
    [routing]
    try = ["lobby"]
+   # try = ["lobby", "survival"]   # fall back to survival if lobby is down
 
-   # How the proxy passes player identity to backend servers.
+   # How the proxy passes the real player identity (IP, UUID, skin) to backends.
+   # Backends receive connections from the proxy IP, not the player's, so this
+   # is required for plugins that need the real player IP or UUID.
+   #
+   #   none        - No forwarding. Backend sees proxy IP only. Safe only when
+   #                 backends are firewalled from the public internet.
+   #   legacy      - BungeeCord-style. Injects player IP, UUID, and skin JSON
+   #                 into the Handshake serverAddress field (null-byte separated).
+   #                 Requires bungeecord: true in spigot.yml on each backend.
+   #   bungeeguard - Same as legacy, plus a signed HMAC token appended as a fake
+   #                 profile property. Prevents forged direct connections.
+   #                 Requires the BungeeGuard plugin on each backend.
+   #   modern      - Velocity native forwarding. Proxy signs a LoginPluginMessage
+   #                 on the velocity:player_info channel with HMAC-SHA256.
+   #                 Requires velocity-native-forwarding: true in paper.yml.
+   #                 Recommended for Paper/Purpur backends.
+   #
+   # secret is required for bungeeguard and modern; ignored for none/legacy.
    [forwarding]
-   mode   = "none"     # none | legacy | bungeeguard | modern
-   secret = ""         # HMAC key for modern / token for bungeeguard
+   mode   = "none"
+   secret = ""
+   # mode   = "modern"
+   # secret = "change-me-to-a-long-random-string"
 
    # Packet compression between proxy and clients.
+   # threshold - minimum packet size in bytes before compression is applied.
+   #             Lower values compress more but use more CPU. -1 disables entirely.
    [compression]
-   threshold = 256     # bytes; -1 to disable
+   threshold = 256
+   # threshold = 512   # less aggressive; good for high-CPU environments
+   # threshold = -1    # disable compression entirely (e.g. LAN-only deployments)
+
+   # Shared SQLite database used by the proxy and plugins for persistent storage.
+   # The file is created automatically on first start. The directory must exist.
+   [storage]
+   file = "data/vector.db"
+   # file = "/var/lib/vector/vector.db"   # absolute path on Linux servers
+
+   # Server-list ping response shown in the Minecraft multiplayer screen.
+   #
+   # description - plain text or Adventure JSON component (starts with {).
+   # favicon     - path to a 64x64 PNG. Leave the file absent to show no icon.
+   [motd]
+   description = "A Vector Proxy"
+   # description = "Welcome to My Network!"
+   # description = "{\"text\":\"My \",\"extra\":[{\"text\":\"Network\",\"color\":\"gold\",\"bold\":true}]}"
+   favicon     = "server-icon.png"
+
+   # Netty I/O thread pool sizes.
+   # boss-threads   - threads that accept new TCP connections. 1 is almost always
+   #                  enough regardless of player count.
+   # worker-threads - threads that handle I/O for connected channels (packet
+   #                  encode/decode, state transitions). 0 = auto, which sets it
+   #                  to availableProcessors * 2. Increase only if profiling shows
+   #                  I/O saturation.
+   [threading]
+   boss-threads   = 1
+   worker-threads = 0
+   # worker-threads = 8   # pin to a fixed count on machines with many cores
+
+   # Maintenance mode: when enabled, connecting players are disconnected
+   # immediately with the configured message before any authentication occurs.
+   # message supports plain text or Adventure JSON (same format as motd.description).
+   [management.maintenance]
+   enabled = false
+   message = "Server is under maintenance."
+   # message = "{\"text\":\"We'll be back soon!\",\"color\":\"red\"}"
+
+   # Forced-host routing: map a hostname to a backend server name.
+   # When a player connects via a matching hostname (as seen in the Handshake
+   # packet) they are routed directly to that server, bypassing routing.try.
+   # Uncomment the section header and add entries to enable.
+   #
+   # [management.forced-hosts]
+   # "lobby.example.com"    = "lobby"
+   # "survival.example.com" = "survival"
+   # "creative.example.com" = "creative"
+
+   # Controls what players see in the server list and what happens when a
+   # backend server drops their connection mid-session.
+   [player-experience]
+   # Multiplies the raw online player count shown in the server list.
+   # 1.0 = show real count. 0.0 = always show 0. 2.0 = double the displayed count.
+   player-count-modifier        = 1.0
+
+   # Floor for the displayed online count. The final value is never shown below this.
+   player-count-minimum         = 0
+   # player-count-minimum = 10   # always show at least 10 players online
+
+   # Added to the displayed maximum player count. Use to make the server look
+   # less full (e.g. padding = 10 shows max as realMax + 10).
+   player-count-maximum-padding = 0
+   # player-count-maximum-padding = 20   # show 20 extra slots as headroom
+
+   # Replace the online/max numbers with ??? in the server list.
+   # Overrides modifier, minimum, and padding when true.
+   hide-player-count            = false
+
+   # What to do when the backend server disconnects a player during play.
+   #
+   #   kick             - disconnect the player from the proxy immediately.
+   #   send-to-fallback - attempt to move the player to the next server in
+   #                      routing.try before kicking (planned, not yet active).
+   #
+   # fallback-message is shown to the player if no fallback server is available
+   # or if action = "kick".
+   [player-experience.backend-disconnect]
+   action           = "kick"
+   fallback-message = "Lost connection to server."
+   # action           = "send-to-fallback"
+   # fallback-message = "The server you were on went down. Sending you to the lobby..."
 
 Forwarding Modes
 ~~~~~~~~~~~~~~~~
@@ -51,23 +166,23 @@ Choose **modern** for Paper-based backends. Use **bungeeguard** for Spigot/Bukki
 backends. Use **none** only if the backend is completely firewalled from the
 internet.
 
-Planned Config (Part 7+)
-------------------------
+Planned Config (Part 7.6+)
+--------------------------
 
-The sections below describe the full config schema planned for Part 7 and beyond.
-They are documented here so the design is settled before coding begins.
+The sections below are designed but not yet implemented.
 
-Threading
-~~~~~~~~~
+Threading — Plugin Dispatcher
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A dedicated ``plugin-dispatcher-threads`` key is planned once the plugin
+dispatcher moves to a named thread pool instead of ``Dispatchers.Default``:
 
 .. code-block:: toml
 
    [threading]
    plugin-dispatcher-threads = 0   # 0 = auto (availableProcessors × 2)
-   netty-boss-threads        = 1
-   netty-worker-threads      = 0   # 0 = auto (availableProcessors × 2)
-
-Vector uses three distinct thread pools:
+   boss-threads              = 1   # already active
+   worker-threads            = 0   # already active
 
 .. mermaid::
 
@@ -79,29 +194,22 @@ Vector uses three distinct thread pools:
        BossGroup --> WorkerGroup
        WorkerGroup -->|"proxyScope.launch { }"| PluginDispatcher
 
-The Netty worker group never suspends or blocks. All plugin work — including
-event handlers — crosses into ``Dispatchers.Default`` via ``proxyScope.launch``.
+``send-to-fallback`` and Limbo
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Player Experience
-~~~~~~~~~~~~~~~~~
+``send-to-fallback`` in ``[player-experience.backend-disconnect]`` is parsed
+but not yet acted on — it requires Play-phase packet support (``DisconnectPacket``
+and respawn/transfer) which lands in Part 7.6. When active, the proxy will
+attempt to reconnect the player to the next server in ``routing.try`` before
+kicking. The ``limbo`` action routes to a Limbo hold instead:
 
 .. code-block:: toml
 
-   [player-experience]
-   player-count-modifier        = 1.0
-   player-count-minimum         = 0
-   player-count-maximum-padding = 20
-   hide-player-count            = false
-
    [player-experience.backend-disconnect]
-   action           = "send-to-fallback"   # send-to-fallback | kick | limbo
-   fallback-message = "<red>Lost connection to server..."
-   limbo-timeout    = 120                  # seconds before kicking from limbo
+   action           = "send-to-fallback"   # or "limbo" (Part 7.6)
+   fallback-message = "Lost connection to server."
+   limbo-timeout    = 120
    limbo-countdown  = true
-
-``player-count-modifier`` scales the online count shown in the server list
-(useful for showing a larger number than the real count). The actual cap is
-``max(player-count-minimum, real_count) + player-count-maximum-padding``.
 
 Protection
 ~~~~~~~~~~

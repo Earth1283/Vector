@@ -16,6 +16,12 @@ data class VectorConfig(
     val routing: RoutingConfig = RoutingConfig(),
     val forwarding: ForwardingConfig = ForwardingConfig(),
     val compression: CompressionConfig = CompressionConfig(),
+    val storage: StorageConfig = StorageConfig(),
+    val motd: MotdConfig = MotdConfig(),
+    val threading: ThreadingConfig = ThreadingConfig(),
+    val management: ManagementConfig = ManagementConfig(),
+    @SerialName("player-experience")
+    val playerExperience: PlayerExperienceConfig = PlayerExperienceConfig(),
 ) {
     @Serializable
     data class RoutingConfig(
@@ -31,10 +37,10 @@ data class VectorConfig(
 
     @Serializable
     enum class ForwardingMode {
-        @SerialName("none")       NONE,
-        @SerialName("legacy")     LEGACY,
+        @SerialName("none")        NONE,
+        @SerialName("legacy")      LEGACY,
         @SerialName("bungeeguard") BUNGEEGUARD,
-        @SerialName("modern")     MODERN,
+        @SerialName("modern")      MODERN,
     }
 
     @Serializable
@@ -42,23 +48,63 @@ data class VectorConfig(
         val threshold: Int = 256,
     )
 
+    @Serializable
+    data class StorageConfig(
+        val file: String = "data/vector.db",
+    )
+
+    @Serializable
+    data class MotdConfig(
+        val description: String = "A Vector Proxy",
+        val favicon: String = "server-icon.png",
+    )
+
+    @Serializable
+    data class ThreadingConfig(
+        @SerialName("boss-threads")   val bossThreads: Int = 1,
+        @SerialName("worker-threads") val workerThreads: Int = 0,
+    )
+
+    @Serializable
+    data class ManagementConfig(
+        val maintenance: MaintenanceConfig = MaintenanceConfig(),
+        @SerialName("forced-hosts")
+        val forcedHosts: Map<String, String> = emptyMap(),
+    )
+
+    @Serializable
+    data class MaintenanceConfig(
+        val enabled: Boolean = false,
+        val message: String = "Server is under maintenance.",
+    )
+
+    @Serializable
+    data class PlayerExperienceConfig(
+        @SerialName("player-count-modifier")         val playerCountModifier: Double = 1.0,
+        @SerialName("player-count-minimum")          val playerCountMinimum: Int = 0,
+        @SerialName("player-count-maximum-padding")  val playerCountMaximumPadding: Int = 0,
+        @SerialName("hide-player-count")             val hidePlayerCount: Boolean = false,
+        @SerialName("backend-disconnect")
+        val backendDisconnect: BackendDisconnectConfig = BackendDisconnectConfig(),
+    )
+
+    @Serializable
+    data class BackendDisconnectConfig(
+        val action: BackendDisconnectAction = BackendDisconnectAction.KICK,
+        @SerialName("fallback-message")
+        val fallbackMessage: String = "Lost connection to server.",
+    )
+
+    @Serializable
+    enum class BackendDisconnectAction {
+        @SerialName("kick")             KICK,
+        @SerialName("send-to-fallback") SEND_TO_FALLBACK,
+    }
+
     companion object {
-        private val DEFAULT_TOML = """
-            bind = "0.0.0.0:25565"
-
-            [servers]
-            lobby = "localhost:25577"
-
-            [routing]
-            try = ["lobby"]
-
-            [forwarding]
-            mode = "none"
-            secret = ""
-
-            [compression]
-            threshold = 256
-        """.trimIndent()
+        private val DEFAULT_TOML: String =
+            VectorConfig::class.java.getResourceAsStream("/default-vector.toml")!!
+                .bufferedReader().readText()
 
         fun load(path: Path = Path.of("vector.toml")): VectorConfig {
             if (!path.exists()) {

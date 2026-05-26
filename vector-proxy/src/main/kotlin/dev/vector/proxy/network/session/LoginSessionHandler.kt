@@ -24,9 +24,22 @@ class LoginSessionHandler(
 
     override fun handle(packet: LoginStartPacket): Boolean {
         loginUsername = packet.username
+
+        val server = connection.server!!
+        val maintenance = server.config.management.maintenance
+        if (maintenance.enabled) {
+            val msg = maintenance.message.let { m ->
+                if (m.trimStart().startsWith("{")) m
+                else """{"text":"${m.replace("\\", "\\\\").replace("\"", "\\\"")}","color":"red"}"""
+            }
+            logger.info("Rejected {} — maintenance mode", loginUsername)
+            connection.closeWith(LoginDisconnectPacket(msg))
+            return true
+        }
+
         logger.info("Login attempt: {} ({})", loginUsername, connection.remoteAddress)
 
-        val keyPair = connection.server!!.keyPair
+        val keyPair = server.keyPair
         verifyToken = ByteArray(4).also { SecureRandom().nextBytes(it) }
         connection.write(EncryptionRequestPacket(
             serverId = "",

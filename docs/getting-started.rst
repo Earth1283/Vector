@@ -224,13 +224,13 @@ Build Order
      - ✓
    * - 7.3
      - Plugin lifecycle: onDisable, command DSL, scheduled tasks
-     - ← next
+     - ✓
    * - 7.4
      - Storage — SQLite, Flyway migrations, pluggable backends
-     -
+     - ✓
    * - 7.5
      - MOTD + full configuration system
-     -
+     - ✓
    * - 7.6
      - Cluster + Limbo
      -

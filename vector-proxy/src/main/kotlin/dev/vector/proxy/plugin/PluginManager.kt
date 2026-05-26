@@ -7,6 +7,7 @@ import dev.vector.api.plugin.PluginContainer
 import dev.vector.proxy.VectorServer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -15,6 +16,7 @@ import kotlinx.serialization.decodeFromString
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.util.jar.JarFile
+import kotlin.coroutines.coroutineContext
 import kotlin.io.path.exists
 import kotlin.io.path.extension
 import kotlin.io.path.listDirectoryEntries
@@ -60,6 +62,13 @@ class PluginManager(private val server: VectorServer) {
         }
     }
 
+    suspend fun disableAll() {
+        for (container in _plugins.asReversed()) {
+            disablePlugin(container)
+        }
+        _plugins.clear()
+    }
+
     private fun loadManifest(jar: Path): dev.vector.api.plugin.PluginManifest? {
         JarFile(jar.toFile()).use { jf ->
             val entry = jf.getJarEntry("vector-plugin.toml") ?: run {
@@ -76,7 +85,7 @@ class PluginManager(private val server: VectorServer) {
             val loader = PluginClassLoader(node.jarPath.toUri().toURL(), parent)
             val clazz = loader.loadClass(node.manifest.entrypoint)
             val instance = clazz.getDeclaredConstructor().newInstance()
-            PluginContainer(node.manifest, instance, CoroutineScope(SupervisorJob() + Dispatchers.Default))
+            PluginContainer(node.manifest, instance, CoroutineScope(SupervisorJob() + Dispatchers.Default), loader)
         } catch (e: Exception) {
             logger.error("Failed to instantiate plugin {}: {}", node.manifest.id, e.message)
             null
@@ -84,14 +93,29 @@ class PluginManager(private val server: VectorServer) {
     }
 
     private fun enablePlugin(container: PluginContainer) {
-        val (manifest, instance, scope) = container
+        val (manifest, instance, scope, classLoader) = container
         val pluginLogger = LoggerFactory.getLogger(manifest.id)
         when (instance) {
             is VectorPlugin -> {
                 logger.info("Enabling plugin {} v{}", manifest.name, manifest.version)
-                instance.enable(VectorPluginScope(server, pluginLogger, manifest.id, scope))
+                instance.enable(VectorPluginScope(server, pluginLogger, manifest.id, scope, classLoader))
             }
             else -> logger.warn("Plugin {} does not extend VectorPlugin, skipping enable", manifest.id)
         }
+    }
+
+    private suspend fun disablePlugin(container: PluginContainer) {
+        val (manifest, instance, scope) = container
+        logger.info("Disabling plugin {} v{}", manifest.name, manifest.version)
+        if (instance is VectorPlugin) {
+            try {
+                instance.disable()
+            } catch (e: Exception) {
+                logger.error("Error in onDisable for {}: {}", manifest.id, e.message)
+            }
+        }
+        server.eventBus.unregisterAll(manifest.id)
+        server.unregisterCommands(manifest.id)
+        scope.coroutineContext[Job]?.cancel()
     }
 }
