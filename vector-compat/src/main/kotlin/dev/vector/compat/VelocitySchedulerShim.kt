@@ -22,6 +22,17 @@ class VelocitySchedulerShim : Scheduler {
 
     override fun tasksByPlugin(plugin: Any): Collection<ScheduledTask> = emptyList()
 
+    fun shutdown() {
+        executor.shutdown()
+        try {
+            if (!executor.awaitTermination(3, TimeUnit.SECONDS)) {
+                executor.shutdownNow()
+            }
+        } catch (_: InterruptedException) {
+            executor.shutdownNow()
+        }
+    }
+
     private inner class TaskBuilderImpl(
         private val ownerPlugin: Any,
         private val action: (ScheduledTask) -> Unit,

@@ -103,7 +103,7 @@ class VelocityPluginLoader(
         val bindings: Map<Class<*>, Any> = buildMap {
             put(ProxyServer::class.java, proxyShim)
             put(EventManager::class.java, proxyShim.eventManagerShim)
-            put(CommandManager::class.java, proxyShim.commandManagerShim)
+            put(CommandManager::class.java, VelocityCommandManagerShimDelegator(proxyShim.commandManagerShim, description.getId()))
             put(PluginContainer::class.java, container)
             put(PluginDescription::class.java, description)
             put(Logger::class.java, LoggerFactory.getLogger(description.getId()))
@@ -128,6 +128,34 @@ class VelocityPluginLoader(
             }
         }
 
-        return ctor.newInstance(*args.toTypedArray())
+        val instance = ctor.newInstance(*args.toTypedArray())
+
+        // Support field injection for legacy plugins (e.g. LuckPerms)
+        var currentClass: Class<*>? = clazz
+        while (currentClass != null && currentClass != Any::class.java) {
+            for (field in currentClass.declaredFields) {
+                if (field.isAnnotationPresent(Inject::class.java)) {
+                    val annotation = field.getAnnotation(DataDirectory::class.java)
+                    val value = if (annotation != null) {
+                        dataDir
+                    } else {
+                        bindings[field.type]
+                    }
+
+                    if (value != null) {
+                        try {
+                            field.isAccessible = true
+                            field.set(instance, value)
+                        } catch (e: Exception) {
+                            logger.warn("Failed to inject field {} in {}: {}", field.name, mainClass, e.message)
+                        }
+                    }
+                }
+            }
+            currentClass = currentClass.superclass
+        }
+
+        return instance
     }
 }
+

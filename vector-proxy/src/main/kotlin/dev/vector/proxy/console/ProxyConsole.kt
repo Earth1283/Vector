@@ -61,8 +61,10 @@ class ProxyConsole(val theme: ConsoleTheme) : Closeable {
                 val line = try {
                     reader.readLine(PROMPT)
                 } catch (_: UserInterruptException) {
-                    continue
+                    onCommand("stop")
+                    break
                 } catch (_: EndOfFileException) {
+                    onCommand("stop")
                     break
                 }
                 if (line.isNotBlank()) {

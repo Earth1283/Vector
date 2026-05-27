@@ -23,7 +23,10 @@ import java.util.Locale
 import java.util.Optional
 import java.util.UUID
 
-class VelocityPlayerShim(private val vectorPlayer: dev.vector.api.VectorPlayer) : Player {
+class VelocityPlayerShim(
+    private val vectorPlayer: dev.vector.api.VectorPlayer,
+    private val vectorServer: dev.vector.api.ProxyServer? = null,
+) : Player {
 
     private val _identity: Identity = Identity.identity(vectorPlayer.uuid)
 
@@ -54,7 +57,12 @@ class VelocityPlayerShim(private val vectorPlayer: dev.vector.api.VectorPlayer) 
     override fun getEffectiveLocale(): Locale = Locale.getDefault()
     override fun setEffectiveLocale(locale: Locale) {}
 
-    override fun getCurrentServer(): Optional<ServerConnection> = Optional.empty()
+    override fun getCurrentServer(): Optional<ServerConnection> {
+        val server = vectorPlayer.currentServer ?: return Optional.empty()
+        val registeredServer = VelocityRegisteredServerShim(server, vectorServer!!)
+        return Optional.of(VelocityServerConnectionShim(this, registeredServer))
+    }
+
     override fun getPlayerSettings(): PlayerSettings = throw UnsupportedOperationException("PlayerSettings not implemented")
     override fun hasSentPlayerSettings(): Boolean = false
     override fun getModInfo(): Optional<ModInfo> = Optional.empty()

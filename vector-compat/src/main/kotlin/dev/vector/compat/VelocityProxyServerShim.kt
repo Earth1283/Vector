@@ -27,6 +27,8 @@ class VelocityProxyServerShim(
 ) : ProxyServer {
 
     private val console = VelocityConsoleCommandSource()
+    private val config = VelocityProxyConfigShim()
+    private val registrar = VelocityChannelRegistrarShim()
 
     override fun getEventManager(): EventManager = eventManagerShim
     override fun getCommandManager(): CommandManager = commandManagerShim
@@ -34,34 +36,38 @@ class VelocityProxyServerShim(
     override fun getPluginManager(): PluginManager = pluginManagerShim
 
     override fun getPlayer(username: String): Optional<Player> =
-        Optional.ofNullable(vectorServer.getPlayer(username)?.let { VelocityPlayerShim(it) })
+        Optional.ofNullable(vectorServer.getPlayer(username)?.let { VelocityPlayerShim(it, vectorServer) })
 
     override fun getPlayer(uuid: UUID): Optional<Player> =
-        Optional.ofNullable(vectorServer.getPlayer(uuid)?.let { VelocityPlayerShim(it) })
+        Optional.ofNullable(vectorServer.getPlayer(uuid)?.let { VelocityPlayerShim(it, vectorServer) })
 
     override fun getAllPlayers(): Collection<Player> =
-        vectorServer.players.map { VelocityPlayerShim(it) }
+        vectorServer.players.map { VelocityPlayerShim(it, vectorServer) }
 
     override fun getPlayerCount(): Int = vectorServer.players.size
 
     override fun matchPlayer(partialName: String): Collection<Player> =
         vectorServer.players
             .filter { it.username.startsWith(partialName, ignoreCase = true) }
-            .map { VelocityPlayerShim(it) }
+            .map { VelocityPlayerShim(it, vectorServer) }
+
+    override fun sendMessage(message: Component) {
+        console.sendMessage(message)
+    }
 
     override fun getServer(name: String): Optional<RegisteredServer> =
         vectorServer.servers
             .find { it.name == name }
-            ?.let { Optional.of(VelocityRegisteredServerShim(it)) }
+            ?.let { Optional.of(VelocityRegisteredServerShim(it, vectorServer)) }
             ?: Optional.empty()
 
     override fun getAllServers(): Collection<RegisteredServer> =
-        vectorServer.servers.map { VelocityRegisteredServerShim(it) }
+        vectorServer.servers.map { VelocityRegisteredServerShim(it, vectorServer) }
 
     override fun matchServer(partialName: String): Collection<RegisteredServer> =
         vectorServer.servers
             .filter { it.name.startsWith(partialName, ignoreCase = true) }
-            .map { VelocityRegisteredServerShim(it) }
+            .map { VelocityRegisteredServerShim(it, vectorServer) }
 
     override fun createRawRegisteredServer(serverInfo: ServerInfo): RegisteredServer =
         throw UnsupportedOperationException("createRawRegisteredServer not implemented")
@@ -73,22 +79,24 @@ class VelocityProxyServerShim(
 
     override fun getConsoleCommandSource(): ConsoleCommandSource = console
 
-    override fun shutdown() {}
-    override fun shutdown(reason: Component) {}
+    override fun shutdown() {
+        schedulerShim.shutdown()
+    }
+
+    override fun shutdown(reason: Component) {
+        shutdown()
+    }
+
     override fun closeListeners() {}
 
-    override fun getBoundAddress(): InetSocketAddress = InetSocketAddress(25565)
+    override fun getBoundAddress(): InetSocketAddress = InetSocketAddress("0.0.0.0", 25565)
 
-    override fun getConfiguration(): ProxyConfig =
-        throw UnsupportedOperationException("getConfiguration not implemented")
+    override fun getConfiguration(): ProxyConfig = config
 
     override fun getVersion(): ProxyVersion = ProxyVersion("Vector", "Vector Team", vectorServer.version)
 
-    override fun getChannelRegistrar(): ChannelRegistrar =
-        throw UnsupportedOperationException("getChannelRegistrar not implemented")
+    override fun getChannelRegistrar(): ChannelRegistrar = registrar
 
     override fun createResourcePackBuilder(url: String): ResourcePackInfo.Builder =
         throw UnsupportedOperationException("createResourcePackBuilder not implemented")
-
-    override fun sendMessage(message: Component) {}
 }

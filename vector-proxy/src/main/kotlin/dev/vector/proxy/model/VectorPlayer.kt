@@ -19,6 +19,7 @@ class VectorPlayer(
     val playerState: PlayerState get() = connection.playerState
 
     var currentServerInfo: BackendServerInfo? = null
+    override val currentServer: dev.vector.api.BackendServer? get() = currentServerInfo
     var currentBackendConn: MinecraftConnection? = null
 
     override fun disconnect(reason: String) {

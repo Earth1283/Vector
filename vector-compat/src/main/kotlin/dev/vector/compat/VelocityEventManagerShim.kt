@@ -40,13 +40,16 @@ class VelocityEventManagerShim(private val vectorServer: ProxyServer) : EventMan
 
     init {
         vectorServer.eventBus.register(PlayerJoinEvent::class, "vector-compat", EventPriority.NORMAL) { event ->
-            fireAndForget(PostLoginEvent(VelocityPlayerShim(event.player)))
+            fireAndForget(PostLoginEvent(VelocityPlayerShim(event.player, vectorServer)))
         }
         vectorServer.eventBus.register(PlayerLeaveEvent::class, "vector-compat", EventPriority.NORMAL) { event ->
-            fireAndForget(DisconnectEvent(VelocityPlayerShim(event.player), DisconnectEvent.LoginStatus.SUCCESSFUL_LOGIN))
+            fireAndForget(DisconnectEvent(VelocityPlayerShim(event.player, vectorServer), DisconnectEvent.LoginStatus.SUCCESSFUL_LOGIN))
         }
         vectorServer.eventBus.register(dev.vector.api.event.ProxyInitializeEvent::class, "vector-compat", EventPriority.NORMAL) { _ ->
             fireAndForget(com.velocitypowered.api.event.proxy.ProxyInitializeEvent())
+        }
+        vectorServer.eventBus.register(dev.vector.api.event.ProxyShutdownEvent::class, "vector-compat", EventPriority.NORMAL) { _ ->
+            fireAndForget(com.velocitypowered.api.event.proxy.ProxyShutdownEvent())
         }
     }
 
@@ -82,12 +85,14 @@ class VelocityEventManagerShim(private val vectorServer: ProxyServer) : EventMan
 
         val subs = subscribers[eventClass]
         if (subs != null) {
-            subs.sortedWith(compareByDescending { it.order.ordinal }).forEach { entry ->
+            subs.sortedBy { it.order.ordinal }.forEach { entry ->
                 try {
+                    entry.method.isAccessible = true
                     entry.method.invoke(entry.listener, event)
-                } catch (e: Exception) {
-                    logger.error("Exception in @Subscribe handler {}.{} for {}",
-                        entry.listener.javaClass.simpleName, entry.method.name, eventClass.simpleName, e)
+                } catch (t: Throwable) {
+                    val cause = if (t is java.lang.reflect.InvocationTargetException) t.targetException else t
+                    logger.error("Error in @Subscribe handler {}.{} for {}: {}",
+                        entry.listener.javaClass.simpleName, entry.method.name, eventClass.simpleName, cause.message, cause)
                 }
             }
         }

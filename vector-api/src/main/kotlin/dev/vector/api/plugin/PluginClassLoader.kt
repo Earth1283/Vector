@@ -26,9 +26,18 @@ class PluginClassLoader(jarUrl: URL, parent: ClassLoader) : URLClassLoader(array
         return findClass(name)
     }
 
+    fun addJar(url: URL) {
+        addURL(url)
+    }
+
     override fun loadClass(name: String, resolve: Boolean): Class<*> {
         if (
             name.startsWith("dev.vector.api.") ||
+            name.startsWith("com.velocitypowered.api.") ||
+            name.startsWith("net.kyori.adventure.") ||
+            name.startsWith("com.google.gson.") ||
+            name.startsWith("com.google.inject.") ||
+            name.startsWith("com.google.common.") ||
             name.startsWith("kotlin.") ||
             name.startsWith("kotlinx.") ||
             name.startsWith("java.") ||

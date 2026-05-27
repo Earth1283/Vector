@@ -5,6 +5,7 @@ import java.util.UUID
 interface VectorPlayer {
     val uuid: UUID
     val username: String
+    val currentServer: BackendServer?
     fun disconnect(reason: String = "Disconnected")
     fun sendMessage(jsonText: String)
 }

@@ -34,24 +34,87 @@ class PluginManager(private val server: VectorServer) {
     private val _plugins = mutableListOf<PluginContainer>()
     val plugins: List<PluginContainer> get() = _plugins
 
+    private var velocityProxyShim: VelocityProxyServerShim? = null
+
     suspend fun loadPlugins(pluginsDir: Path) {
         if (!pluginsDir.exists()) return
 
         val jars = pluginsDir.listDirectoryEntries().filter { it.extension == "jar" }
+        if (jars.isEmpty()) return
 
-        // Split jars into native (vector-plugin.toml) and legacy (velocity-plugin.json)
-        val nativeJars = mutableListOf<Path>()
-        val legacyJars = mutableListOf<Path>()
-        for (jar in jars) {
-            when (detectPluginType(jar)) {
-                PluginType.NATIVE  -> nativeJars.add(jar)
-                PluginType.LEGACY  -> legacyJars.add(jar)
-                PluginType.UNKNOWN -> logger.warn("{} has no plugin manifest, skipping", jar.fileName)
+        val nodes = jars.mapNotNull { jar ->
+            try {
+                detectPluginType(jar).let { type ->
+                    when (type) {
+                        PluginType.NATIVE -> loadManifest(jar)?.let { PluginNode(it, jar) }
+                        PluginType.LEGACY -> loadLegacyManifest(jar)?.let { PluginNode(it, jar) }
+                        PluginType.UNKNOWN -> {
+                            logger.warn("{} has no plugin manifest, skipping", jar.fileName)
+                            null
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Failed to read manifest from {}: {}", jar.fileName, e.message)
+                null
+            }
+        }
+        if (nodes.isEmpty()) return
+
+        val waves = try {
+            computeWaves(nodes)
+        } catch (e: IllegalStateException) {
+            logger.error("Plugin load aborted: {}", e.message)
+            return
+        }
+
+        // Initialize Velocity compatibility layer if we have legacy plugins
+        if (nodes.any { it.manifest.language == dev.vector.api.plugin.PluginLanguage.JAVA }) {
+            val eventMgr = VelocityEventManagerShim(server)
+            val cmdMgr = VelocityCommandManagerShim(server)
+            val sched = VelocitySchedulerShim()
+            val pluginMgr = VelocityPluginManagerShim(server)
+            velocityProxyShim = VelocityProxyServerShim(server, eventMgr, cmdMgr, sched, pluginMgr)
+        }
+
+        val parentLoader = javaClass.classLoader
+        coroutineScope {
+            for (wave in waves) {
+                wave.map { node ->
+                    async(Dispatchers.Default) {
+                        if (node.manifest.language == dev.vector.api.plugin.PluginLanguage.JAVA && velocityProxyShim != null) {
+                            val loader = VelocityPluginLoader(velocityProxyShim!!, pluginsDir)
+                            loader.loadAndEnable(node.jarPath)
+                        } else {
+                            instantiatePlugin(node, parentLoader)
+                        }
+                    }
+                }.awaitAll().filterNotNull().forEach { _plugins.add(it) }
             }
         }
 
-        loadNativePlugins(pluginsDir, nativeJars)
-        _plugins.addAll(loadLegacyPlugins(pluginsDir, legacyJars))
+        for (container in _plugins) {
+            if (container.instance !is dev.vector.api.kotlin.VectorPlugin) continue
+            enablePlugin(container)
+        }
+    }
+
+    private fun loadLegacyManifest(jar: Path): dev.vector.api.plugin.PluginManifest? {
+        JarFile(jar.toFile()).use { jf ->
+            val entry = jf.getJarEntry("velocity-plugin.json") ?: return null
+            val json = jf.getInputStream(entry).bufferedReader().readText()
+            val manifest = dev.vector.compat.VelocityManifest.parse(json)
+            return dev.vector.api.plugin.PluginManifest(
+                id = manifest.id,
+                name = manifest.name ?: manifest.id,
+                version = manifest.version ?: "1.0.0",
+                apiVersion = "1.0.0",
+                entrypoint = manifest.main,
+                language = dev.vector.api.plugin.PluginLanguage.JAVA,
+                hardDeps = manifest.dependencies.filter { !it.optional }.map { it.id },
+                softDeps = manifest.dependencies.filter { it.optional }.map { it.id }
+            )
+        }
     }
 
     private fun detectPluginType(jar: Path): PluginType {
@@ -69,56 +132,12 @@ class PluginManager(private val server: VectorServer) {
         }
     }
 
-    private suspend fun loadNativePlugins(pluginsDir: Path, jars: List<Path>) {
-        val nodes = jars.mapNotNull { jar ->
-            try {
-                loadManifest(jar)?.let { PluginNode(it, jar) }
-            } catch (e: Exception) {
-                logger.warn("Failed to read manifest from {}: {}", jar.fileName, e.message)
-                null
-            }
-        }
-        if (nodes.isEmpty()) return
-
-        val waves = try {
-            computeWaves(nodes)
-        } catch (e: IllegalStateException) {
-            logger.error("Plugin load aborted: {}", e.message)
-            return
-        }
-
-        val parentLoader = javaClass.classLoader
-        coroutineScope {
-            for (wave in waves) {
-                wave.map { node ->
-                    async(Dispatchers.Default) { instantiatePlugin(node, parentLoader) }
-                }.awaitAll().filterNotNull().forEach { _plugins.add(it) }
-            }
-        }
-
-        for (container in _plugins) {
-            enablePlugin(container)
-        }
-    }
-
-    private fun loadLegacyPlugins(pluginsDir: Path, jars: List<Path>): List<PluginContainer> {
-        if (jars.isEmpty()) return emptyList()
-        val eventMgr = VelocityEventManagerShim(server)
-        val cmdMgr = VelocityCommandManagerShim(server)
-        val sched = VelocitySchedulerShim()
-        val pluginMgr = VelocityPluginManagerShim()
-        val proxyShim = VelocityProxyServerShim(server, eventMgr, cmdMgr, sched, pluginMgr)
-        val loader = VelocityPluginLoader(proxyShim, pluginsDir)
-        return jars.mapNotNull { jar ->
-            loader.loadAndEnable(jar)
-        }
-    }
-
     suspend fun disableAll() {
         for (container in _plugins.asReversed()) {
             disablePlugin(container)
         }
         _plugins.clear()
+        velocityProxyShim?.shutdown()
     }
 
     private enum class PluginType { NATIVE, LEGACY, UNKNOWN }
