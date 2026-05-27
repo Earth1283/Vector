@@ -137,22 +137,36 @@ events in its ``init`` block:
 
    init {
        vectorServer.eventBus.register(PlayerJoinEvent::class, "vector-compat", ...) { event ->
-           fireAndForget(PostLoginEvent(VelocityPlayerShim(event.player)))
+           fireAndForget(PostLoginEvent(VelocityPlayerShim(event.player, vectorServer)))
        }
        vectorServer.eventBus.register(PlayerLeaveEvent::class, "vector-compat", ...) { event ->
-           fireAndForget(DisconnectEvent(VelocityPlayerShim(event.player), ...))
+           fireAndForget(DisconnectEvent(VelocityPlayerShim(event.player, vectorServer), ...))
+       }
+       vectorServer.eventBus.register(ProxyInitializeEvent::class, "vector-compat", ...) { _ ->
+           fireAndForget(com.velocitypowered.api.event.proxy.ProxyInitializeEvent())
+       }
+       vectorServer.eventBus.register(ProxyShutdownEvent::class, "vector-compat", ...) { _ ->
+           fireAndForget(com.velocitypowered.api.event.proxy.ProxyShutdownEvent())
        }
    }
 
 ``register(plugin, listener)`` scans for ``@Subscribe`` methods:
 
-1. Finds all methods with a single parameter annotated with ``@Subscribe``.
+1. Finds all methods (including non-public ones) with a single parameter annotated with ``@Subscribe``.
 2. Reads ``annotation.order`` (a Kotlin property access — **not** ``order()``).
 3. Stores ``SubscriberEntry(plugin, listener, method, order)`` keyed by event type.
 
-``fire(event)`` dispatches subscribers sorted by ``PostOrder.ordinal`` descending
-(``LAST`` fires first), then dispatches functional ``EventHandler`` entries sorted
-by priority descending. Returns ``CompletableFuture.completedFuture(event)``.
+``fire(event)`` dispatches subscribers sorted by ``PostOrder.ordinal`` ascending
+(``FIRST`` fires first), then dispatches functional ``EventHandler`` entries sorted
+by priority descending. 
+
+.. important::
+
+   **Async Dispatching:** To prevent legacy plugins from hanging the proxy during 
+   startup (e.g., during database migrations in ``onEnable``), the compat layer 
+   dispatches all Velocity events to a dedicated thread pool (``Velocity Event Dispatcher``). 
+   The returned ``CompletableFuture`` completes only when all subscribers for 
+   that event have finished executing.
 
 .. mermaid::
 
@@ -167,8 +181,9 @@ by priority descending. Returns ``CompletableFuture.completedFuture(event)``.
 ``VelocityPluginLoader``
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Loads a single legacy JAR and performs manual constructor injection — Velocity
-normally uses Guice for this; the compat layer does it explicitly instead.
+Loads a single legacy JAR and performs manual injection — Velocity
+normally uses Guice for this; the compat layer does it explicitly instead. 
+It supports both constructor injection and field injection via ``@Inject``.
 
 .. mermaid::
 
@@ -176,40 +191,54 @@ normally uses Guice for this; the compat layer does it explicitly instead.
        Load["loadAndEnable(jarPath)"]
        Manifest["Read velocity-plugin.json\nfrom JAR entry\n→ VelocityManifest"]
        Desc["Wrap in VelocityDescriptionShim\n(implements PluginDescription)"]
-       CL["Create URLClassLoader\n(jarPath + proxy classloader as parent)"]
+       CL["Create PluginClassLoader\n(jarPath + proxy classloader as parent)"]
        Bindings["Build bindings map\nProxyServer, EventManager, CommandManager\nPluginContainer, PluginDescription\nLogger, ComponentLogger\nPath (@DataDirectory), ExecutorService"]
        Ctor["Find @Inject constructor\nor single constructor"]
        Resolve["Resolve each parameter\nfrom bindings map\n(@DataDirectory → data dir Path)"]
        Instantiate["ctor.newInstance(*args)"]
+       FieldInject["Find @Inject fields\nin class hierarchy\nand inject bindings"]
        Register["container.setInstance(instance)\npluginManager.registerPlugin(container)\neventManager.register(instance, instance)"]
 
-       Load --> Manifest --> Desc --> CL --> Bindings --> Ctor --> Resolve --> Instantiate --> Register
+       Load --> Manifest --> Desc --> CL --> Bindings --> Ctor --> Resolve --> Instantiate --> FieldInject --> Register
 
 Compat Classloader
 ------------------
 
 Velocity plugins depend on ``velocity-api`` types at runtime. ``vector-compat``
 declares ``velocity-api`` as an ``api`` dependency so it is bundled into the
-shadow JAR and available on the proxy classpath. The per-plugin ``URLClassLoader``
+shadow JAR and available on the proxy classpath. The per-plugin ``PluginClassLoader``
 uses the proxy classloader as its parent, so both loaders resolve
-``com.velocitypowered.*`` to the same ``Class<?>`` objects via parent delegation.
+``com.velocitypowered.*`` (and other shared platform packages like Gson and Kyori) 
+to the same ``Class<?>`` objects via parent delegation. 
+
+Additionally, because ``PluginClassLoader`` is used, legacy plugins participate in the 
+same cross-plugin class visibility network as native Vector plugins.
 
 .. mermaid::
 
    graph TD
-       CompatCL["URLClassLoader\n(per legacy plugin JAR)"]
+       CompatCL["PluginClassLoader\n(per legacy plugin JAR)"]
        VelAPI["velocity-api\n(bundled in proxy shadow JAR\nvia vector-compat api dep)"]
        PluginJAR["legacy-plugin.jar"]
        Parent["Proxy classloader\n(vector-api, Netty, velocity-api, etc.)"]
 
        CompatCL -->|"loadClass com.velocitypowered.*\n→ parent delegation"| VelAPI
        CompatCL -->|"loadClass plugin.*\n→ child-first from JAR"| PluginJAR
+       CompatCL -->|"cross-plugin lookup"| CompatCL
        CompatCL -->|"fallback"| Parent
 
 ``velocity-api`` types are resolved via parent delegation — both the proxy and the
 plugin classloader see the same ``Class<?>`` objects. This is critical: if they
 were loaded separately, ``instanceof ProxyServer`` checks across the boundary would
 return ``false``.
+
+Lifecycle & Resource Management
+-------------------------------
+
+Legacy plugins are fully integrated into the proxy's lifecycle:
+
+* **Dependency Sorting:** During startup, legacy and native plugins are combined into a single unified dependency graph. Legacy plugins wait to load until their ``dependencies`` (both hard and soft) have been initialized.
+* **Graceful Shutdown:** When the proxy is shut down (via ``stop`` command or ``SIGINT``), the compatibility layer fires the ``ProxyShutdownEvent`` to allow legacy plugins to save data. It then properly terminates the ``VelocitySchedulerShim`` thread pool and the asynchronous event dispatcher to ensure a clean JVM exit.
 
 Load Log Output
 ---------------
