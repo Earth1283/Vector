@@ -29,4 +29,10 @@ class VectorPlayer(
             connection.close()
         }
     }
+
+    override fun sendMessage(jsonText: String) {
+        if (connection.playerState is PlayerState.InServer) {
+            connection.write(dev.vector.proxy.protocol.packet.play.SystemChatPacket(message = jsonText))
+        }
+    }
 }

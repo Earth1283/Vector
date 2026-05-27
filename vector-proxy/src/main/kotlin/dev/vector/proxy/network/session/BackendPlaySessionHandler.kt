@@ -29,7 +29,7 @@ class BackendPlaySessionHandler(private val player: VectorPlayer) : SessionHandl
                 val currentServer = player.currentServerInfo?.name
                 val fallback = player.server.config.routing.tryServers
                     .filter { it != currentServer }
-                    .firstNotNullOfOrNull { player.server.servers[it] }
+                    .firstNotNullOfOrNull { player.server.serverMap[it] }
 
                 if (fallback != null) {
                     player.connection.setAutoReading(false)

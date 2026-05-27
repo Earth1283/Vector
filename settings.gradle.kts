@@ -5,5 +5,6 @@ include(
     "vector-api-kotlin",
     "vector-compat",
     "vector-proxy",
-    "hello-world-plugin"
+    "hello-world-plugin",
+    "vec-test"
 )

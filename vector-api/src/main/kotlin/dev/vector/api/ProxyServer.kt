@@ -9,6 +9,7 @@ interface ProxyServer {
     val eventBus: EventBus
     val storage: StorageBackend
     val players: Collection<VectorPlayer>
+    val servers: Collection<BackendServer>
     fun getPlayer(uuid: UUID): VectorPlayer?
     fun getPlayer(username: String): VectorPlayer?
     fun registerCommand(name: String, pluginId: String, handler: suspend (List<String>) -> Unit)
