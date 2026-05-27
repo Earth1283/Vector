@@ -35,7 +35,7 @@ class MinecraftConnection(val channel: Channel, val server: VectorServer? = null
     val isClosed: Boolean get() = !channel.isActive
     val remoteAddress: SocketAddress get() = channel.remoteAddress()
 
-    // -- Netty callbacks -------------------------------------------------------
+    // Netty callbacks 
 
     override fun channelActive(ctx: ChannelHandlerContext) {
         sessionHandler?.connected()
@@ -69,7 +69,7 @@ class MinecraftConnection(val channel: Channel, val server: VectorServer? = null
         }
     }
 
-    // -- Session handler -------------------------------------------------------
+    // Session handler 
 
     fun setSessionHandler(handler: SessionHandler) {
         sessionHandler?.deactivated()
@@ -82,7 +82,7 @@ class MinecraftConnection(val channel: Channel, val server: VectorServer? = null
         playerState = playerState.transition(next)
     }
 
-    // -- State / protocol version ----------------------------------------------
+    // State / protocol version 
 
     fun setState(next: ProtocolState) {
         state = next
@@ -96,7 +96,7 @@ class MinecraftConnection(val channel: Channel, val server: VectorServer? = null
         channel.pipeline().get(MinecraftPacketEncoder::class.java)?.protocolVersion = version
     }
 
-    // -- Pipeline mutations ----------------------------------------------------
+    // Pipeline mutations 
 
     fun enableEncryption(sharedSecret: ByteArray) {
         val dec = CryptoUtils.createCipher(Cipher.DECRYPT_MODE, sharedSecret)
@@ -111,7 +111,7 @@ class MinecraftConnection(val channel: Channel, val server: VectorServer? = null
         channel.pipeline().replace("frame-encoder", "compress-encoder", MinecraftCompressEncoder(threshold))
     }
 
-    // -- Write helpers ---------------------------------------------------------
+    // Write helpers 
 
     fun write(packet: MinecraftPacket) {
         if (channel.isActive) channel.writeAndFlush(packet)
@@ -140,7 +140,7 @@ class MinecraftConnection(val channel: Channel, val server: VectorServer? = null
         }
     }
 
-    // -- AutoRead --------------------------------------------------------------
+    // AutoRead 
 
     fun setAutoReading(autoReading: Boolean) {
         channel.config().isAutoRead = autoReading

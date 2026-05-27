@@ -29,7 +29,7 @@ class SqliteStorageBackend(file: String) : StorageBackend {
         logger.info("SQLite storage opened: {}", file)
     }
 
-    // -- Internal helpers (no locking, must be called while lock is held) -----
+    // Internal helpers (no locking, must be called while lock is held) 
 
     private fun <T> doQuery(sql: String, params: List<Any?>, mapper: (ResultSet) -> T): List<T> {
         return conn.prepareStatement(sql).use { stmt ->
@@ -49,7 +49,7 @@ class SqliteStorageBackend(file: String) : StorageBackend {
         }
     }
 
-    // -- StorageBackend impl --------------------------------------------------
+    // StorageBackend impl 
 
     override suspend fun <T> query(sql: String, params: List<Any?>, mapper: (ResultSet) -> T): List<T> =
         withContext(Dispatchers.IO) {

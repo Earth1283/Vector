@@ -19,7 +19,7 @@ class HelloWorldPlugin : VectorPlugin({
     val sessions = ConcurrentHashMap<UUID, Instant>()
     val totalJoins = AtomicLong(0)
 
-    // -- Lifecycle ------------------------------------------------------------
+    // Lifecycle 
 
     onEnable {
         migrate()  // apply db/migration/V1__init.sql from this JAR
@@ -34,13 +34,13 @@ class HelloWorldPlugin : VectorPlugin({
         logger.info("HelloWorld shutting down ({} total joins this session).", totalJoins.get())
     }
 
-    // -- Scheduled task -------------------------------------------------------
+    // Scheduled task 
 
     every(30.seconds) {
         logger.debug("Heartbeat: {} player(s) online", server.players.size)
     }
 
-    // -- Plugin commands ------------------------------------------------------
+    // Plugin commands 
 
     command("hello") { args ->
         val who = args.firstOrNull() ?: "World"
@@ -61,7 +61,7 @@ class HelloWorldPlugin : VectorPlugin({
         }
     }
 
-    // -- Join handling --------------------------------------------------------
+    // Join handling 
 
     on<PlayerJoinEvent> { event ->
         val player = event.player
@@ -86,7 +86,7 @@ class HelloWorldPlugin : VectorPlugin({
         logger.debug("[monitor] join pipeline complete for {}", event.player.username)
     }
 
-    // -- Leave handling -------------------------------------------------------
+    // Leave handling 
 
     on<PlayerLeaveEvent> { event ->
         val player = event.player

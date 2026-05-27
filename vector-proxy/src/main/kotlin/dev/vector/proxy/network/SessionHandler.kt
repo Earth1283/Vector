@@ -21,45 +21,45 @@ import dev.vector.proxy.protocol.packet.status.StatusResponsePacket
 import io.netty.buffer.ByteBuf
 
 interface SessionHandler {
-    // -- Lifecycle -------------------------------------------------------------
+    // Lifecycle 
     fun connected()   {}
     fun disconnected() {}
     fun activated()   {}
     fun deactivated() {}
     fun exception(cause: Throwable) {}
 
-    // -- Generic fallbacks -----------------------------------------------------
+    // Generic fallbacks 
     fun handleGeneric(packet: MinecraftPacket) {}
     fun handleUnknown(buf: ByteBuf) {}
 
-    // -- Handshake -------------------------------------------------------------
+    // Handshake 
     fun handle(packet: HandshakePacket): Boolean = false
 
-    // -- Status ----------------------------------------------------------------
+    // Status 
     fun handle(packet: StatusRequestPacket): Boolean = false
     fun handle(packet: StatusResponsePacket): Boolean = false
     fun handle(packet: PingRequestPacket): Boolean = false
     fun handle(packet: PingResponsePacket): Boolean = false
 
-    // -- Login (serverbound) ---------------------------------------------------
+    // Login (serverbound) 
     fun handle(packet: LoginStartPacket): Boolean = false
     fun handle(packet: EncryptionResponsePacket): Boolean = false
     fun handle(packet: LoginAcknowledgedPacket): Boolean = false
 
-    // -- Login (clientbound) ---------------------------------------------------
+    // Login (clientbound) 
     fun handle(packet: EncryptionRequestPacket): Boolean = false
     fun handle(packet: LoginSuccessPacket): Boolean = false
     fun handle(packet: LoginDisconnectPacket): Boolean = false
     fun handle(packet: SetCompressionPacket): Boolean = false
     fun handle(packet: LoginPluginMessagePacket): Boolean = false
 
-    // -- Login plugin (serverbound) --------------------------------------------
+    // Login plugin (serverbound) 
     fun handle(packet: LoginPluginResponsePacket): Boolean = false
 
-    // -- Configuration (clientbound) -------------------------------------------
+    // Configuration (clientbound) 
     fun handle(packet: ConfigurationDisconnectPacket): Boolean = false
 
-    // -- Play (clientbound) ----------------------------------------------------
+    // Play (clientbound) 
     fun handle(packet: PlayDisconnectPacket): Boolean = false
     fun handle(packet: SystemChatPacket): Boolean = false
 }
