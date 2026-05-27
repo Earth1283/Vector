@@ -54,3 +54,4 @@ venv/
 vector.toml
 .kotlin/
 run/
+apt-mc/
