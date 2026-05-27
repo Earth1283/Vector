@@ -45,6 +45,13 @@ class VelocityEventManagerShim(private val vectorServer: ProxyServer) : EventMan
         vectorServer.eventBus.register(PlayerLeaveEvent::class, "vector-compat", EventPriority.NORMAL) { event ->
             fireAndForget(DisconnectEvent(VelocityPlayerShim(event.player), DisconnectEvent.LoginStatus.SUCCESSFUL_LOGIN))
         }
+        vectorServer.eventBus.register(dev.vector.api.event.ProxyInitializeEvent::class, "vector-compat", EventPriority.NORMAL) { _ ->
+            fireAndForget(com.velocitypowered.api.event.proxy.ProxyInitializeEvent())
+        }
+    }
+
+    override fun fireAndForget(event: Any) {
+        fire(event)
     }
 
     override fun register(plugin: Any, listener: Any) {

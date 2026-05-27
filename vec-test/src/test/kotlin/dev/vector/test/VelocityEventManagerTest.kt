@@ -11,6 +11,7 @@ import dev.vector.api.event.EventPriority
 import dev.vector.api.event.VectorEvent
 import dev.vector.api.storage.StorageBackend
 import dev.vector.compat.VelocityEventManagerShim
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.util.UUID
@@ -79,7 +80,7 @@ class VelocityEventManagerTest {
         var received: String? = null
 
         val plugin = Any()
-        mgr.register(plugin, CustomEvent::class.java, PostOrder.NORMAL, EventHandler { e ->
+        mgr.register(plugin, CustomEvent::class.java, PostOrder.NORMAL, EventHandler { e: CustomEvent ->
             received = e.payload
         })
 
@@ -93,6 +94,46 @@ class VelocityEventManagerTest {
         val event = CustomEvent("data")
         val result = mgr.fire(event).get()
         assertSame(event, result)
+    }
+
+    @Test
+    fun `ProxyInitializeEvent is mapped to velocity`() {
+        val bus = object : EventBus {
+            var handler: (suspend (VectorEvent) -> Unit)? = null
+            override fun <T : VectorEvent> register(
+                eventClass: KClass<T>, pluginId: String, priority: EventPriority, handler: suspend (T) -> Unit,
+            ) {
+                if (eventClass == dev.vector.api.event.ProxyInitializeEvent::class) {
+                    @Suppress("UNCHECKED_CAST")
+                    this.handler = handler as suspend (VectorEvent) -> Unit
+                }
+            }
+            override fun unregisterAll(pluginId: String) {}
+            override suspend fun <T : VectorEvent> fire(event: T): T = event
+        }
+
+        val server = object : ProxyServer by fakeServer {
+            override val eventBus = bus
+        }
+
+        val mgr = VelocityEventManagerShim(server)
+        var received = false
+
+        val listener = object {
+            @Subscribe
+            fun onInit(event: com.velocitypowered.api.event.proxy.ProxyInitializeEvent) {
+                received = true
+            }
+        }
+
+        mgr.register(listener, listener)
+
+        // Simulate native fire
+        runBlocking {
+            bus.handler?.invoke(dev.vector.api.event.ProxyInitializeEvent())
+        }
+
+        assertTrue(received, "Velocity ProxyInitializeEvent should have been fired")
     }
 
     data class CustomEvent(val payload: String)

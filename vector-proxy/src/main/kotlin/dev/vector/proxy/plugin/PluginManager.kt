@@ -3,6 +3,7 @@ package dev.vector.proxy.plugin
 import com.akuleshov7.ktoml.Toml
 import dev.vector.api.kotlin.VectorPlugin
 import dev.vector.api.kotlin.VectorPluginScope
+import dev.vector.api.plugin.PluginClassLoader
 import dev.vector.api.plugin.PluginContainer
 import dev.vector.compat.VelocityCommandManagerShim
 import dev.vector.compat.VelocityEventManagerShim
@@ -50,7 +51,7 @@ class PluginManager(private val server: VectorServer) {
         }
 
         loadNativePlugins(pluginsDir, nativeJars)
-        loadLegacyPlugins(pluginsDir, legacyJars)
+        _plugins.addAll(loadLegacyPlugins(pluginsDir, legacyJars))
     }
 
     private fun detectPluginType(jar: Path): PluginType {
@@ -100,15 +101,15 @@ class PluginManager(private val server: VectorServer) {
         }
     }
 
-    private fun loadLegacyPlugins(pluginsDir: Path, jars: List<Path>) {
-        if (jars.isEmpty()) return
+    private fun loadLegacyPlugins(pluginsDir: Path, jars: List<Path>): List<PluginContainer> {
+        if (jars.isEmpty()) return emptyList()
         val eventMgr = VelocityEventManagerShim(server)
         val cmdMgr = VelocityCommandManagerShim(server)
         val sched = VelocitySchedulerShim()
         val pluginMgr = VelocityPluginManagerShim()
         val proxyShim = VelocityProxyServerShim(server, eventMgr, cmdMgr, sched, pluginMgr)
         val loader = VelocityPluginLoader(proxyShim, pluginsDir)
-        for (jar in jars) {
+        return jars.mapNotNull { jar ->
             loader.loadAndEnable(jar)
         }
     }

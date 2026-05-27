@@ -1,4 +1,4 @@
-package dev.vector.proxy.plugin
+package dev.vector.api.plugin
 
 import java.net.URL
 import java.net.URLClassLoader

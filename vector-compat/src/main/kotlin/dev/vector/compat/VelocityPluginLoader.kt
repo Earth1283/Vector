@@ -7,14 +7,20 @@ import com.velocitypowered.api.plugin.PluginContainer
 import com.velocitypowered.api.plugin.PluginDescription
 import com.velocitypowered.api.plugin.annotation.DataDirectory
 import com.velocitypowered.api.proxy.ProxyServer
+import dev.vector.api.plugin.PluginLanguage
+import dev.vector.api.plugin.PluginManifest
+import dev.vector.api.plugin.PluginClassLoader
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import net.kyori.adventure.text.logger.slf4j.ComponentLogger
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.net.URLClassLoader
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ExecutorService
 import java.util.jar.JarFile
+import dev.vector.api.plugin.PluginContainer as VectorPluginContainer
 
 class VelocityPluginLoader(
     private val proxyShim: VelocityProxyServerShim,
@@ -22,14 +28,19 @@ class VelocityPluginLoader(
 ) {
     private val logger = LoggerFactory.getLogger(VelocityPluginLoader::class.java)
 
-    fun loadAndEnable(jarPath: Path): VelocityContainerShim? {
+    fun loadAndEnable(jarPath: Path): VectorPluginContainer? {
         val manifest = readManifest(jarPath) ?: return null
         val description = VelocityDescriptionShim(manifest, jarPath)
 
         val container = VelocityContainerShim(description)
 
+        val classLoader = PluginClassLoader(
+            jarPath.toUri().toURL(),
+            javaClass.classLoader,
+        )
+
         val instance = try {
-            instantiate(jarPath, manifest.main, description, container)
+            instantiate(jarPath, manifest.main, description, container, classLoader)
         } catch (e: Exception) {
             logger.error("Failed to instantiate velocity plugin {} from {}: {}", manifest.id, jarPath.fileName, e.message)
             return null
@@ -46,7 +57,23 @@ class VelocityPluginLoader(
             description.getVersion().orElse("?"),
             description.getAuthors().joinToString(", ").ifEmpty { "?" })
 
-        return container
+        val nativeManifest = PluginManifest(
+            id = manifest.id,
+            name = manifest.name ?: manifest.id,
+            version = manifest.version ?: "1.0.0",
+            apiVersion = "1.0.0",
+            entrypoint = manifest.main,
+            language = PluginLanguage.JAVA,
+            hardDeps = manifest.dependencies.filter { !it.optional }.map { it.id },
+            softDeps = manifest.dependencies.filter { it.optional }.map { it.id }
+        )
+
+        return VectorPluginContainer(
+            manifest = nativeManifest,
+            instance = instance,
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            classLoader = classLoader
+        )
     }
 
     private fun readManifest(jarPath: Path): VelocityManifest? {
@@ -67,12 +94,8 @@ class VelocityPluginLoader(
         mainClass: String,
         description: VelocityDescriptionShim,
         container: VelocityContainerShim,
+        classLoader: ClassLoader,
     ): Any {
-        val classLoader = URLClassLoader(
-            arrayOf(jarPath.toUri().toURL()),
-            javaClass.classLoader,
-        )
-
         val clazz = classLoader.loadClass(mainClass)
         val dataDir = pluginsDir.resolve(description.getId())
         Files.createDirectories(dataDir)
