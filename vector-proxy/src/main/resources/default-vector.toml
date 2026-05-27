@@ -121,7 +121,7 @@ hide-player-count = false
 #
 #   kick             - disconnect the player from the proxy immediately.
 #   send-to-fallback - attempt to move the player to the next server in
-#                      routing.try before kicking (planned, not yet active).
+#                      routing.try before kicking.
 #
 # fallback-message is shown to the player if no fallback server is available
 # or if action = "kick".
@@ -130,3 +130,22 @@ action             = "kick"
 fallback-message   = "Lost connection to server."
 # action           = "send-to-fallback"
 # fallback-message = "The server you were on went down. Sending you to the lobby..."
+
+# Limbo holds authenticated players when no backend server is reachable.
+#
+#   unclaimed-action  - what to do when authentication succeeds but no backend
+#                       server in routing.try is available.
+#
+#     kick - disconnect immediately with unclaimed-message.
+#     hold - suspend the player for up to max-hold-duration seconds, retrying
+#            every 5 s until a backend becomes available.
+#
+#   unclaimed-message  - shown to held players when max-hold-duration expires,
+#                        or immediately when action = "kick".
+#   max-hold-duration  - seconds before a held player is kicked. 0 = unlimited.
+[limbo]
+unclaimed-action    = "kick"
+unclaimed-message   = "No server available."
+max-hold-duration   = 120
+# unclaimed-action  = "hold"
+# max-hold-duration = 0   # hold indefinitely until a server comes up

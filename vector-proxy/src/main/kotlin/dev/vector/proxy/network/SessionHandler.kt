@@ -1,6 +1,7 @@
 package dev.vector.proxy.network
 
 import dev.vector.proxy.protocol.packet.MinecraftPacket
+import dev.vector.proxy.protocol.packet.configuration.ConfigurationDisconnectPacket
 import dev.vector.proxy.protocol.packet.handshake.HandshakePacket
 import dev.vector.proxy.protocol.packet.login.EncryptionRequestPacket
 import dev.vector.proxy.protocol.packet.login.EncryptionResponsePacket
@@ -11,6 +12,8 @@ import dev.vector.proxy.protocol.packet.login.LoginPluginResponsePacket
 import dev.vector.proxy.protocol.packet.login.LoginStartPacket
 import dev.vector.proxy.protocol.packet.login.LoginSuccessPacket
 import dev.vector.proxy.protocol.packet.login.SetCompressionPacket
+import dev.vector.proxy.protocol.packet.play.PlayDisconnectPacket
+import dev.vector.proxy.protocol.packet.play.SystemChatPacket
 import dev.vector.proxy.protocol.packet.status.PingRequestPacket
 import dev.vector.proxy.protocol.packet.status.PingResponsePacket
 import dev.vector.proxy.protocol.packet.status.StatusRequestPacket
@@ -52,4 +55,11 @@ interface SessionHandler {
 
     // -- Login plugin (serverbound) --------------------------------------------
     fun handle(packet: LoginPluginResponsePacket): Boolean = false
+
+    // -- Configuration (clientbound) -------------------------------------------
+    fun handle(packet: ConfigurationDisconnectPacket): Boolean = false
+
+    // -- Play (clientbound) ----------------------------------------------------
+    fun handle(packet: PlayDisconnectPacket): Boolean = false
+    fun handle(packet: SystemChatPacket): Boolean = false
 }

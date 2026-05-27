@@ -1,19 +1,22 @@
 package dev.vector.proxy.network.session
 
+import dev.vector.proxy.config.VectorConfig
 import dev.vector.proxy.model.VectorPlayer
 import dev.vector.proxy.network.BackendConnection
 import dev.vector.proxy.network.MinecraftConnection
 import dev.vector.proxy.network.SessionHandler
+import dev.vector.proxy.protocol.ProtocolState
 import dev.vector.proxy.protocol.ProtocolVersion
+import dev.vector.proxy.protocol.packet.configuration.ConfigurationDisconnectPacket
 import dev.vector.proxy.protocol.packet.login.LoginAcknowledgedPacket
-import dev.vector.proxy.protocol.packet.login.LoginDisconnectPacket
 import dev.vector.proxy.protocol.packet.login.LoginSuccessPacket
+import dev.vector.proxy.protocol.packet.play.PlayDisconnectPacket
 import org.slf4j.LoggerFactory
 
 class ClientLoginSuccessSessionHandler(
     private val connection: MinecraftConnection,
     private val player: VectorPlayer,
-    private val backendConnection: BackendConnection,
+    private val backendConnection: BackendConnection?,
 ) : SessionHandler {
 
     private val logger = LoggerFactory.getLogger(ClientLoginSuccessSessionHandler::class.java)
@@ -22,14 +25,13 @@ class ClientLoginSuccessSessionHandler(
         connection.write(LoginSuccessPacket.from(player.profile, connection.protocolVersion))
 
         if (connection.protocolVersion.protocol < ProtocolVersion.MINECRAFT_1_20_2.protocol) {
-            // Pre-1.20.2: no LoginAcknowledged — connect to backend immediately.
-            connectToBackend()
+            connectOrLimbo()
         }
-        // 1.20.2+: wait for LoginAcknowledged in handle() below.
+        // 1.20.2+: wait for LoginAcknowledged.
     }
 
     override fun handle(packet: LoginAcknowledgedPacket): Boolean {
-        connectToBackend()
+        connectOrLimbo()
         return true
     }
 
@@ -38,11 +40,29 @@ class ClientLoginSuccessSessionHandler(
         connection.close()
     }
 
-    private fun connectToBackend() {
-        backendConnection.connect {
-            connection.closeWith(
-                LoginDisconnectPacket("""{"text":"Could not connect to backend server","color":"red"}""")
-            )
+    private fun connectOrLimbo() {
+        val backend = backendConnection
+        if (backend == null) {
+            connection.setSessionHandler(ClientLimboSessionHandler(player))
+            return
+        }
+        backend.connect {
+            val limboAction = player.server.config.limbo.unclaimedAction
+            if (limboAction == VectorConfig.LimboAction.HOLD) {
+                connection.setSessionHandler(ClientLimboSessionHandler(player))
+            } else {
+                kickClient("Could not connect to backend server")
+            }
+        }
+    }
+
+    private fun kickClient(message: String) {
+        if (connection.protocolVersion.protocol >= ProtocolVersion.MINECRAFT_1_20_2.protocol) {
+            connection.setState(ProtocolState.CONFIGURATION)
+            connection.closeWith(ConfigurationDisconnectPacket("""{"text":"$message","color":"red"}"""))
+        } else {
+            connection.setState(ProtocolState.PLAY)
+            connection.closeWith(PlayDisconnectPacket("""{"text":"$message","color":"red"}"""))
         }
     }
 }

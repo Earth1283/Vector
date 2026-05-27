@@ -146,10 +146,15 @@ class BackendLoginSessionHandler(
         player.currentServerInfo = backendConnection.serverInfo
         player.currentBackendConn = backendConn
 
-        // Remove packet codec from both sides; raw ByteBuf forwarding takes over.
-        // Frame-decoder, compress-decoder/-encoder, and frame-encoder remain for proper framing.
-        player.connection.channel.pipeline().remove("packet-decoder")
-        player.connection.channel.pipeline().remove("packet-encoder")
+        // Remove client-side decoder; raw ByteBuf forwarding takes over for inbound.
+        // Guard against second call (server switch) where decoder is already gone.
+        // Keep packet-encoder so structured packets (e.g. PlayDisconnect) can still be sent.
+        if (player.connection.channel.pipeline().get("packet-decoder") != null) {
+            player.connection.channel.pipeline().remove("packet-decoder")
+        }
+        // Advance encoder state to PLAY so it resolves Play-phase packet IDs correctly.
+        player.connection.setState(ProtocolState.PLAY)
+
         backendConn.channel.pipeline().remove("packet-decoder")
         backendConn.channel.pipeline().remove("packet-encoder")
 

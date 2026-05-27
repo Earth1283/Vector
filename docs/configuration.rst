@@ -7,7 +7,7 @@ default ``vector.toml`` to the working directory if the file does not exist.
 Current Implemented Config
 --------------------------
 
-This is the full schema **active today** (Parts 1–7.5). The file below is
+This is the full schema **active today** (Parts 1–7.6). The file below is
 what Vector writes to ``vector.toml`` on first start — every option is
 commented in place so the file is self-documenting. You do not need this
 page to configure the proxy; it exists for quick reference.
@@ -137,7 +137,7 @@ page to configure the proxy; it exists for quick reference.
    #
    #   kick             - disconnect the player from the proxy immediately.
    #   send-to-fallback - attempt to move the player to the next server in
-   #                      routing.try before kicking (planned, not yet active).
+   #                      routing.try before kicking.
    #
    # fallback-message is shown to the player if no fallback server is available
    # or if action = "kick".
@@ -146,6 +146,25 @@ page to configure the proxy; it exists for quick reference.
    fallback-message = "Lost connection to server."
    # action           = "send-to-fallback"
    # fallback-message = "The server you were on went down. Sending you to the lobby..."
+
+   # Limbo holds authenticated players when no backend server is reachable.
+   #
+   #   unclaimed-action  - what to do when authentication succeeds but no backend
+   #                       server in routing.try is available.
+   #
+   #     kick - disconnect immediately with unclaimed-message.
+   #     hold - suspend the player for up to max-hold-duration seconds, retrying
+   #            every 5 s until a backend becomes available.
+   #
+   #   unclaimed-message  - shown to held players when max-hold-duration expires,
+   #                        or immediately when action = "kick".
+   #   max-hold-duration  - seconds before a held player is kicked. 0 = unlimited.
+   [limbo]
+   unclaimed-action    = "kick"
+   unclaimed-message   = "No server available."
+   max-hold-duration   = 120
+   # unclaimed-action  = "hold"
+   # max-hold-duration = 0   # hold indefinitely until a server comes up
 
 Forwarding Modes
 ~~~~~~~~~~~~~~~~
@@ -166,7 +185,7 @@ Choose **modern** for Paper-based backends. Use **bungeeguard** for Spigot/Bukki
 backends. Use **none** only if the backend is completely firewalled from the
 internet.
 
-Planned Config (Part 7.6+)
+Planned Config (Part 7.7+)
 --------------------------
 
 The sections below are designed but not yet implemented.
@@ -193,23 +212,6 @@ dispatcher moves to a named thread pool instead of ``Dispatchers.Default``:
 
        BossGroup --> WorkerGroup
        WorkerGroup -->|"proxyScope.launch { }"| PluginDispatcher
-
-``send-to-fallback`` and Limbo
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-``send-to-fallback`` in ``[player-experience.backend-disconnect]`` is parsed
-but not yet acted on — it requires Play-phase packet support (``DisconnectPacket``
-and respawn/transfer) which lands in Part 7.6. When active, the proxy will
-attempt to reconnect the player to the next server in ``routing.try`` before
-kicking. The ``limbo`` action routes to a Limbo hold instead:
-
-.. code-block:: toml
-
-   [player-experience.backend-disconnect]
-   action           = "send-to-fallback"   # or "limbo" (Part 7.6)
-   fallback-message = "Lost connection to server."
-   limbo-timeout    = 120
-   limbo-countdown  = true
 
 Protection
 ~~~~~~~~~~
@@ -281,21 +283,6 @@ Observability
    include-player-ips = false      # set false for GDPR compliance
    log-commands       = false      # true only for auditing (PII risk)
 
-Limbo
-~~~~~
-
-.. code-block:: toml
-
-   [limbo]
-   unclaimed-action    = "kick"
-   unclaimed-message   = "<red>Server unavailable."
-   max-hold-duration   = 120   # seconds before kicking held players
-   keep-alive-interval = 15    # seconds between keep-alive packets
-   keep-alive-timeout  = 30    # seconds without response before declaring dead
-
-Limbo holds authenticated players in a minimal fake world when no backend
-server is available. The proxy is responsible for keep-alive packets during
-this period — the player's client must not time out.
 
 Per-server Overrides
 ~~~~~~~~~~~~~~~~~~~~

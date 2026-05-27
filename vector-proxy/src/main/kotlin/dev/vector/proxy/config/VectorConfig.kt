@@ -22,6 +22,7 @@ data class VectorConfig(
     val management: ManagementConfig = ManagementConfig(),
     @SerialName("player-experience")
     val playerExperience: PlayerExperienceConfig = PlayerExperienceConfig(),
+    val limbo: LimboConfig = LimboConfig(),
 ) {
     @Serializable
     data class RoutingConfig(
@@ -99,6 +100,22 @@ data class VectorConfig(
     enum class BackendDisconnectAction {
         @SerialName("kick")             KICK,
         @SerialName("send-to-fallback") SEND_TO_FALLBACK,
+    }
+
+    @Serializable
+    data class LimboConfig(
+        @SerialName("unclaimed-action")
+        val unclaimedAction: LimboAction = LimboAction.KICK,
+        @SerialName("unclaimed-message")
+        val unclaimedMessage: String = "No server available.",
+        @SerialName("max-hold-duration")
+        val maxHoldDuration: Long = 120L,
+    )
+
+    @Serializable
+    enum class LimboAction {
+        @SerialName("kick") KICK,
+        @SerialName("hold") HOLD,
     }
 
     companion object {

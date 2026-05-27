@@ -4,6 +4,7 @@ import dev.vector.proxy.VectorServer
 import dev.vector.proxy.network.MinecraftConnection
 import dev.vector.proxy.network.PlayerState
 import dev.vector.proxy.protocol.ProtocolVersion
+import dev.vector.proxy.protocol.packet.play.PlayDisconnectPacket
 import java.util.UUID
 
 class VectorPlayer(
@@ -21,6 +22,11 @@ class VectorPlayer(
     var currentBackendConn: MinecraftConnection? = null
 
     override fun disconnect(reason: String) {
-        connection.close()
+        if (connection.playerState is PlayerState.InServer) {
+            val escaped = reason.replace("\\", "\\\\").replace("\"", "\\\"")
+            connection.closeWith(PlayDisconnectPacket("""{"text":"$escaped"}"""))
+        } else {
+            connection.close()
+        }
     }
 }

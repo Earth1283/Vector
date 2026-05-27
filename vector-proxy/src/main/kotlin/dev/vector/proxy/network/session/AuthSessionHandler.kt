@@ -1,5 +1,6 @@
 package dev.vector.proxy.network.session
 
+import dev.vector.proxy.config.VectorConfig
 import dev.vector.proxy.crypto.MojangAuth
 import dev.vector.proxy.model.VectorPlayer
 import dev.vector.proxy.network.BackendConnection
@@ -39,20 +40,27 @@ class AuthSessionHandler(
                 val server = connection.server!!
                 val player = VectorPlayer(profile, connection, server)
                 val initialServer = server.getInitialServer(connection.virtualHost)
-                if (initialServer == null) {
-                    connection.closeWith(
-                        LoginDisconnectPacket("""{"text":"No backend servers are configured","color":"red"}""")
-                    )
-                    return@execute
-                }
-
-                server.playerConnected(player)
 
                 val threshold = server.config.compression.threshold
                 if (threshold >= 0) {
                     connection.write(SetCompressionPacket(threshold))
                     connection.enableCompression(threshold)
                 }
+
+                if (initialServer == null) {
+                    val limbo = server.config.limbo
+                    if (limbo.unclaimedAction == VectorConfig.LimboAction.HOLD) {
+                        server.playerConnected(player)
+                        connection.setSessionHandler(ClientLoginSuccessSessionHandler(connection, player, null))
+                    } else {
+                        connection.closeWith(
+                            LoginDisconnectPacket("""{"text":"No backend servers are configured","color":"red"}""")
+                        )
+                    }
+                    return@execute
+                }
+
+                server.playerConnected(player)
 
                 val backendConnection = BackendConnection(player, initialServer)
                 connection.setSessionHandler(

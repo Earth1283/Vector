@@ -51,6 +51,7 @@ class BackendConnection(
             .addListener(ChannelFutureListener { future ->
                 if (!future.isSuccess) {
                     logger.warn("Could not connect to {}: {}", serverInfo.name, future.cause().message)
+                    player.server.markBackendUnavailable(serverInfo.name)
                     clientConn.channel.eventLoop().execute(onFailure)
                 }
             })
