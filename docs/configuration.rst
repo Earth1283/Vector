@@ -7,7 +7,7 @@ default ``vector.toml`` to the working directory if the file does not exist.
 Current Implemented Config
 --------------------------
 
-This is the full schema **active today** (Parts 1–7.6). The file below is
+This is the full schema **active today** (Parts 1–7.7). The file below is
 what Vector writes to ``vector.toml`` on first start — every option is
 commented in place so the file is self-documenting. You do not need this
 page to configure the proxy; it exists for quick reference.
@@ -185,7 +185,7 @@ Choose **modern** for Paper-based backends. Use **bungeeguard** for Spigot/Bukki
 backends. Use **none** only if the backend is completely firewalled from the
 internet.
 
-Planned Config (Part 7.7+)
+Planned Config (Part 7.8+)
 --------------------------
 
 The sections below are designed but not yet implemented.

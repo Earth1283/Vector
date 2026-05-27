@@ -8,9 +8,10 @@ through the compatibility layer instead of the native plugin loader.
 
 .. note::
 
-   **Status:** The compat classloader is in ``vector-compat`` and will be wired
-   into the plugin loader in Part 7. The shim architecture documented here is
-   finalised — only the wiring remains.
+   **Status: complete as of Part 7.7.** The full shim layer is implemented in
+   ``vector-compat`` and wired into ``PluginManager``. Velocity plugins with a
+   ``velocity-plugin.json`` manifest are loaded automatically alongside native
+   plugins.
 
 Hard Limits
 -----------
@@ -78,20 +79,24 @@ Compat Layer Architecture
            PS["VelocityProxyServerShim\nimplements ProxyServer"]
            EM["VelocityEventManagerShim\nimplements EventManager"]
            CM["VelocityCommandManagerShim\nimplements CommandManager"]
-           SM["VelocitySchedulerShim\nimplements Scheduler"]
-           PM["VelocityPlayerShim\nimplements RegisteredServer"]
+           SM["VelocitySchedulerShim\nimplements Scheduler\nown ScheduledExecutorService"]
+           PP["VelocityPlayerShim\nimplements Player"]
+           RS["VelocityRegisteredServerShim\nimplements RegisteredServer"]
+           PL["VelocityPluginLoader\nconstructor injection"]
        end
 
-       subgraph Vector["vector internals"]
-           VS["VectorServer\n(ProxyServer)"]
-           EB["EventBusImpl"]
+       subgraph Vector["vector-api"]
+           VS["ProxyServer\n(interface)"]
+           EB["EventBus\n(interface)"]
        end
 
        VP --> PS & EM & CM & SM
        PS --> VS
        EM --> EB
        CM --> VS
-       SM --> VS
+       PL --> PS
+       PS --> PP
+       PS --> RS
 
 Each shim implements the corresponding Velocity API interface and delegates
 every call to the equivalent Vector internal. The Velocity plugin never sees a
@@ -103,74 +108,108 @@ Shim Implementations
 ``VelocityProxyServerShim``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Constructed once per compat-load session and shared across all legacy plugins
+loaded in that session. Takes the pre-built shim collaborators as constructor
+parameters:
+
 .. code-block:: kotlin
 
-   class VelocityProxyServerShim(private val server: VectorServer) : ProxyServer {
+   class VelocityProxyServerShim(
+       private val vectorServer: dev.vector.api.ProxyServer,
+       val eventManagerShim: VelocityEventManagerShim,
+       val commandManagerShim: VelocityCommandManagerShim,
+       val schedulerShim: VelocitySchedulerShim,
+       val pluginManagerShim: VelocityPluginManagerShim,
+   ) : ProxyServer
 
-       override fun getPlayer(username: String): Optional<Player> =
-           Optional.ofNullable(server.getPlayer(username))
-               ?.map { VelocityPlayerShim(it) }
-
-       override fun getAllPlayers(): Collection<Player> =
-           server.players.map { VelocityPlayerShim(it) }
-
-       override fun getPluginManager(): PluginManager = VelocityPluginManagerShim(server)
-
-       override fun getEventManager(): EventManager = VelocityEventManagerShim(server.eventBus)
-
-       override fun getCommandManager(): CommandManager = VelocityCommandManagerShim(server)
-
-       override fun getScheduler(): Scheduler = VelocitySchedulerShim(server.proxyScope)
-
-       override fun getVersion(): ProxyVersion =
-           ProxyVersion("Vector", "Vector", server.version)
-   }
+Player and server lookups delegate to ``vectorServer`` and wrap results in
+their respective shims (``VelocityPlayerShim``, ``VelocityRegisteredServerShim``).
+``getVersion()`` returns ``ProxyVersion("Vector", "Vector Team", vectorServer.version)``.
 
 ``VelocityEventManagerShim``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The most complex shim. Velocity's event system uses ``@Subscribe`` annotations
-and the ``EventTask`` return type for async events. The shim:
+Handles both ``@Subscribe``-annotated listener objects and functional
+``EventHandler<E>`` registrations. It also bridges Vector events to Velocity
+events in its ``init`` block:
 
-1. Scans for ``@Subscribe``-annotated methods on the listener object.
-2. Wraps each handler in a ``suspend (T) -> Unit`` lambda.
-3. Registers the lambda with ``EventBusImpl`` using the ``@Subscribe`` priority.
+.. code-block:: kotlin
+
+   init {
+       vectorServer.eventBus.register(PlayerJoinEvent::class, "vector-compat", ...) { event ->
+           fireAndForget(PostLoginEvent(VelocityPlayerShim(event.player)))
+       }
+       vectorServer.eventBus.register(PlayerLeaveEvent::class, "vector-compat", ...) { event ->
+           fireAndForget(DisconnectEvent(VelocityPlayerShim(event.player), ...))
+       }
+   }
+
+``register(plugin, listener)`` scans for ``@Subscribe`` methods:
+
+1. Finds all methods with a single parameter annotated with ``@Subscribe``.
+2. Reads ``annotation.order`` (a Kotlin property access — **not** ``order()``).
+3. Stores ``SubscriberEntry(plugin, listener, method, order)`` keyed by event type.
+
+``fire(event)`` dispatches subscribers sorted by ``PostOrder.ordinal`` descending
+(``LAST`` fires first), then dispatches functional ``EventHandler`` entries sorted
+by priority descending. Returns ``CompletableFuture.completedFuture(event)``.
 
 .. mermaid::
 
    flowchart TD
        Register["eventManager.register(plugin, listenerObject)"]
-       Scan["Reflect on listenerObject\nfind @Subscribe methods"]
-       ForEach["For each method:\nresolve event type, priority"]
-       Wrap["Wrap method.invoke() in\nsuspend lambda\nhandle EventTask async returns"]
-       RegEB["eventBus.register(eventClass, pluginId, priority, lambda)"]
+       Scan["Reflect on listenerObject\nfind @Subscribe methods (paramCount == 1)"]
+       ForEach["For each method:\nread annotation.order, resolve event type"]
+       Store["Store SubscriberEntry\nin ConcurrentHashMap keyed by event class"]
 
-       Register --> Scan --> ForEach --> Wrap --> RegEB
+       Register --> Scan --> ForEach --> Store
+
+``VelocityPluginLoader``
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Loads a single legacy JAR and performs manual constructor injection — Velocity
+normally uses Guice for this; the compat layer does it explicitly instead.
+
+.. mermaid::
+
+   flowchart TD
+       Load["loadAndEnable(jarPath)"]
+       Manifest["Read velocity-plugin.json\nfrom JAR entry\n→ VelocityManifest"]
+       Desc["Wrap in VelocityDescriptionShim\n(implements PluginDescription)"]
+       CL["Create URLClassLoader\n(jarPath + proxy classloader as parent)"]
+       Bindings["Build bindings map\nProxyServer, EventManager, CommandManager\nPluginContainer, PluginDescription\nLogger, ComponentLogger\nPath (@DataDirectory), ExecutorService"]
+       Ctor["Find @Inject constructor\nor single constructor"]
+       Resolve["Resolve each parameter\nfrom bindings map\n(@DataDirectory → data dir Path)"]
+       Instantiate["ctor.newInstance(*args)"]
+       Register["container.setInstance(instance)\npluginManager.registerPlugin(container)\neventManager.register(instance, instance)"]
+
+       Load --> Manifest --> Desc --> CL --> Bindings --> Ctor --> Resolve --> Instantiate --> Register
 
 Compat Classloader
 ------------------
 
-Velocity plugins may depend on ``velocity-api`` types at runtime. The compat
-classloader exposes these types by loading ``velocity-api`` from the proxy
-classpath (where it lives as a ``compileOnly`` dependency of ``vector-compat``).
+Velocity plugins depend on ``velocity-api`` types at runtime. ``vector-compat``
+declares ``velocity-api`` as an ``api`` dependency so it is bundled into the
+shadow JAR and available on the proxy classpath. The per-plugin ``URLClassLoader``
+uses the proxy classloader as its parent, so both loaders resolve
+``com.velocitypowered.*`` to the same ``Class<?>`` objects via parent delegation.
 
 .. mermaid::
 
    graph TD
-       CompatCL["CompatClassLoader\nextends URLClassLoader"]
-       VelAPI["velocity-api.jar\n(on proxy classpath via\nvector-compat compileOnly)"]
+       CompatCL["URLClassLoader\n(per legacy plugin JAR)"]
+       VelAPI["velocity-api\n(bundled in proxy shadow JAR\nvia vector-compat api dep)"]
        PluginJAR["legacy-plugin.jar"]
-       Parent["Proxy classloader\n(vector-api, Netty, etc.)"]
+       Parent["Proxy classloader\n(vector-api, Netty, velocity-api, etc.)"]
 
-       CompatCL -->|"loadClass velocity.*\n→ parent delegation"| VelAPI
-       CompatCL -->|"loadClass plugin.*\n→ child-first"| PluginJAR
-       CompatCL -->|"not found anywhere else"| Parent
+       CompatCL -->|"loadClass com.velocitypowered.*\n→ parent delegation"| VelAPI
+       CompatCL -->|"loadClass plugin.*\n→ child-first from JAR"| PluginJAR
+       CompatCL -->|"fallback"| Parent
 
-``velocity-api`` types loaded by the compat classloader are the **same** ``Class<?>``
-**objects** as those loaded by the proxy classloader, because both use parent
-delegation for ``com.velocitypowered.*`` classes. This is critical — if two
-classloaders each loaded ``ProxyServer.class``, ``instanceof`` checks would fail
-across the boundary.
+``velocity-api`` types are resolved via parent delegation — both the proxy and the
+plugin classloader see the same ``Class<?>`` objects. This is critical: if they
+were loaded separately, ``instanceof ProxyServer`` checks across the boundary would
+return ``false``.
 
 Load Log Output
 ---------------

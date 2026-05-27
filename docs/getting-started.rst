@@ -50,20 +50,23 @@ Project Layout
        Root["vector/\n(root project)"]
        API["vector-api\nPublic plugin API surface\nNo Velocity, no Netty"]
        AK["vector-api-kotlin\nKotlin DSL layer\nVectorPlugin { }"]
-       Compat["vector-compat\nVelocity compatibility shim\n(compileOnly: velocity-api)"]
+       Compat["vector-compat\nVelocity compatibility shim\n(bundles velocity-api)"]
        Proxy["vector-proxy\nCore implementation\nNetty · codec · plugins · state"]
        HW["hello-world-plugin\nExample plugin\n(compileOnly: vector-api-kotlin)"]
+       VT["vec-test\nJUnit 5 integration tests\ncompat shim coverage"]
 
        Root --> API
        Root --> AK
        Root --> Compat
        Root --> Proxy
        Root --> HW
+       Root --> VT
        API --> AK
        API --> Compat
        AK --> Proxy
        Compat --> Proxy
        AK -.->|compileOnly| HW
+       Compat -.->|testImplementation| VT
 
        style API fill:#d9edf7,stroke:#31708f
        style AK fill:#dff0d8,stroke:#3c763d
@@ -236,9 +239,15 @@ Build Order
      - ✓
    * - 7.6
      - Cluster + Limbo
-     -
+     - ✓
    * - 7.7
-     - Velocity compat wiring + VecTest suite
+     - Velocity compat wiring + vec-test unit suite
+     - ✓
+   * - 7.8
+     - VecTest plugin — live 138-endpoint API coverage
+     -
+   * - 7.9
+     - apt-mc / Modrinth nightly CI harness
      -
 
 Writing Your First Plugin
