@@ -42,7 +42,7 @@ class VelocityCommandManagerShim(private val vectorServer: ProxyServer) : Comman
         }
 
         for (alias in aliases) {
-            vectorServer.registerCommand(alias, pluginId) { args ->
+            vectorServer.registerCommand(alias, pluginId, { args ->
                 val source = VelocityConsoleCommandSource()
                 when (command) {
                     is RawCommand -> {
@@ -63,7 +63,27 @@ class VelocityCommandManagerShim(private val vectorServer: ProxyServer) : Comman
                         }
                     }
                 }
-            }
+            }, { args ->
+                val source = VelocityConsoleCommandSource()
+                when (command) {
+                    is RawCommand -> {
+                        val invocation = VelocityRawInvocation(source, alias, args.joinToString(" "))
+                        command.suggest(invocation)
+                    }
+                    is SimpleCommand -> {
+                        val invocation = VelocitySimpleInvocation(source, alias, args.toTypedArray())
+                        command.suggest(invocation)
+                    }
+                    is BrigadierCommand -> {
+                        val dispatcher = brigadierDispatchers[command] ?: return@registerCommand emptyList()
+                        val cmdLine = if (args.isEmpty()) alias else "$alias ${args.joinToString(" ")}"
+                        val parseResults = dispatcher.parse(cmdLine, source)
+                        val suggestions = dispatcher.getCompletionSuggestions(parseResults).get()
+                        suggestions.list.map { it.text }
+                    }
+                    else -> emptyList()
+                }
+            })
         }
     }
 

@@ -28,7 +28,12 @@ class VelocityCommandManagerTest {
         override fun getPlayer(uuid: UUID): VectorPlayer? = null
         override fun getPlayer(username: String): VectorPlayer? = null
         
-        override fun registerCommand(name: String, pluginId: String, handler: suspend (List<String>) -> Unit) {
+        override fun registerCommand(
+            name: String,
+            pluginId: String,
+            handler: suspend (List<String>) -> Unit,
+            completer: (List<String>) -> List<String>
+        ) {
             registeredCommands[name] = pluginId to handler
         }
         

@@ -41,8 +41,17 @@ class VectorPluginScope(
         server.storage.migrate(pluginId, classLoader, location)
     }
 
-    fun command(name: String, handler: suspend VectorPluginScope.(List<String>) -> Unit) {
-        server.registerCommand(name, pluginId) { args -> this@VectorPluginScope.handler(args) }
+    fun command(
+        name: String,
+        completer: VectorPluginScope.(List<String>) -> List<String> = { emptyList() },
+        handler: suspend VectorPluginScope.(List<String>) -> Unit
+    ) {
+        server.registerCommand(
+            name,
+            pluginId,
+            { args -> this@VectorPluginScope.handler(args) },
+            { args -> this@VectorPluginScope.completer(args) }
+        )
     }
 
     fun every(period: Duration, block: suspend VectorPluginScope.() -> Unit): Job =
