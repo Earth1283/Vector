@@ -14,7 +14,12 @@ interface ProxyServer {
     val coroutineScope: CoroutineScope
     fun getPlayer(uuid: UUID): VectorPlayer?
     fun getPlayer(username: String): VectorPlayer?
-    fun registerCommand(name: String, pluginId: String, handler: suspend (List<String>) -> Unit)
+    fun registerCommand(
+        name: String,
+        pluginId: String,
+        handler: suspend (List<String>) -> Unit,
+        completer: (List<String>) -> List<String> = { emptyList() }
+    )
     fun unregisterCommands(pluginId: String)
     fun registerServer(name: String, address: java.net.InetSocketAddress): BackendServer
     fun unregisterServer(name: String)
