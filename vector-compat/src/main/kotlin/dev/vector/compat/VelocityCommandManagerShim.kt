@@ -1,5 +1,6 @@
 package dev.vector.compat
 
+import com.mojang.brigadier.CommandDispatcher
 import com.mojang.brigadier.tree.CommandNode
 import com.velocitypowered.api.command.BrigadierCommand
 import com.velocitypowered.api.command.Command
@@ -13,14 +14,17 @@ import java.util.concurrent.CompletableFuture
 
 class VelocityCommandManagerShim(private val vectorServer: ProxyServer) : CommandManager {
 
+    private val brigadierDispatchers = mutableMapOf<Command, CommandDispatcher<CommandSource>>()
+
     override fun metaBuilder(alias: String): CommandMeta.Builder =
         VelocityCommandMetaBuilder(alias)
 
     override fun metaBuilder(command: BrigadierCommand): CommandMeta.Builder =
-        throw UnsupportedOperationException("Brigadier metaBuilder not implemented")
+        VelocityCommandMetaBuilder(command.node.name)
 
     override fun register(command: BrigadierCommand) {
-        // Brigadier not yet supported
+        val meta = metaBuilder(command).build()
+        register(meta, command)
     }
 
     override fun register(meta: CommandMeta, command: Command) {
@@ -31,20 +35,32 @@ class VelocityCommandManagerShim(private val vectorServer: ProxyServer) : Comman
         val aliases = meta.aliases
         if (aliases.isEmpty()) return
         
+        if (command is BrigadierCommand) {
+            val dispatcher = CommandDispatcher<CommandSource>()
+            dispatcher.root.addChild(command.node)
+            brigadierDispatchers[command] = dispatcher
+        }
+
         for (alias in aliases) {
             vectorServer.registerCommand(alias, pluginId) { args ->
                 val source = VelocityConsoleCommandSource()
                 when (command) {
                     is RawCommand -> {
-                        val invocation = SimpleRawInvocation(source, alias, args.joinToString(" "))
+                        val invocation = VelocityRawInvocation(source, alias, args.joinToString(" "))
                         command.execute(invocation)
                     }
                     is SimpleCommand -> {
-                        val invocation = SimpleCommandInvocation(source, alias, args.toTypedArray())
+                        val invocation = VelocitySimpleInvocation(source, alias, args.toTypedArray())
                         command.execute(invocation)
                     }
-                    else -> {
-                        // Other command types (like Brigadier) not yet supported
+                    is BrigadierCommand -> {
+                        val dispatcher = brigadierDispatchers[command]
+                        val cmdLine = if (args.isEmpty()) alias else "$alias ${args.joinToString(" ")}"
+                        try {
+                            dispatcher?.execute(cmdLine, source)
+                        } catch (e: Exception) {
+                            source.sendMessage(net.kyori.adventure.text.Component.text("Error executing command: ${e.message}", net.kyori.adventure.text.format.NamedTextColor.RED))
+                        }
                     }
                 }
             }
@@ -52,8 +68,7 @@ class VelocityCommandManagerShim(private val vectorServer: ProxyServer) : Comman
     }
 
     override fun unregister(alias: String) {
-        // VectorServer doesn't have a direct unregister for a single alias yet, 
-        // it unregisters by plugin ID. We'll leave this as a stub for now.
+        // VectorServer doesn't have a direct unregister for a single alias yet
     }
 
     override fun unregister(meta: CommandMeta) {
@@ -103,7 +118,7 @@ class VelocityCommandManagerShim(private val vectorServer: ProxyServer) : Comman
         override fun build(): CommandMeta = VelocityCommandMeta(primaryAlias, aliases, pluginInstance)
     }
 
-    private class SimpleRawInvocation(
+    private class VelocityRawInvocation(
         private val source: CommandSource,
         private val alias: String,
         private val args: String,
@@ -113,7 +128,7 @@ class VelocityCommandManagerShim(private val vectorServer: ProxyServer) : Comman
         override fun arguments(): String = args
     }
 
-    private class SimpleCommandInvocation(
+    private class VelocitySimpleInvocation(
         private val source: CommandSource,
         private val alias: String,
         private val arguments: Array<String>,
@@ -129,6 +144,10 @@ class VelocityCommandManagerShimDelegator(
     private val pluginId: String,
 ) : CommandManager by delegate {
     override fun register(meta: CommandMeta, command: Command) {
+        delegate.register(meta, command, pluginId)
+    }
+    override fun register(command: BrigadierCommand) {
+        val meta = delegate.metaBuilder(command).build()
         delegate.register(meta, command, pluginId)
     }
 }

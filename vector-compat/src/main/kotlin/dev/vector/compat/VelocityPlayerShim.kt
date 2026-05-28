@@ -9,11 +9,15 @@ import com.velocitypowered.api.proxy.ServerConnection
 import com.velocitypowered.api.proxy.messages.ChannelIdentifier
 import com.velocitypowered.api.proxy.messages.PluginMessageEncoder
 import com.velocitypowered.api.proxy.player.PlayerSettings
+import com.velocitypowered.api.proxy.player.SkinParts
 import com.velocitypowered.api.proxy.player.ResourcePackInfo
 import com.velocitypowered.api.proxy.player.TabList
+import com.velocitypowered.api.proxy.player.TabListEntry
+import com.velocitypowered.api.proxy.player.ChatSession
 import com.velocitypowered.api.proxy.server.RegisteredServer
 import com.velocitypowered.api.util.GameProfile
 import com.velocitypowered.api.util.ModInfo
+import kotlinx.coroutines.future.future
 import net.kyori.adventure.identity.Identity
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer
@@ -22,13 +26,16 @@ import java.net.InetSocketAddress
 import java.util.Locale
 import java.util.Optional
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
 
 class VelocityPlayerShim(
-    private val vectorPlayer: dev.vector.api.VectorPlayer,
-    private val vectorServer: dev.vector.api.ProxyServer? = null,
+    val vectorPlayer: dev.vector.api.VectorPlayer,
+    val vectorServer: dev.vector.api.ProxyServer? = null,
 ) : Player {
 
     private val _identity: Identity = Identity.identity(vectorPlayer.uuid)
+    private val playerSettings = VelocityPlayerSettings()
+    private val tabList = VelocityTabList()
 
     // - Identified
     override fun identity(): Identity = _identity
@@ -63,14 +70,14 @@ class VelocityPlayerShim(
         return Optional.of(VelocityServerConnectionShim(this, registeredServer))
     }
 
-    override fun getPlayerSettings(): PlayerSettings = throw UnsupportedOperationException("PlayerSettings not implemented")
-    override fun hasSentPlayerSettings(): Boolean = false
+    override fun getPlayerSettings(): PlayerSettings = playerSettings
+    override fun hasSentPlayerSettings(): Boolean = true
     override fun getModInfo(): Optional<ModInfo> = Optional.empty()
     override fun getPing(): Long = -1L
     override fun isOnlineMode(): Boolean = true
 
     override fun createConnectionRequest(server: RegisteredServer): ConnectionRequestBuilder =
-        throw UnsupportedOperationException("createConnectionRequest not implemented")
+        VelocityConnectionRequestBuilder(this, server)
 
     override fun getGameProfileProperties(): List<GameProfile.Property> = emptyList()
     override fun setGameProfileProperties(properties: List<GameProfile.Property>) {}
@@ -80,7 +87,7 @@ class VelocityPlayerShim(
     override fun clearPlayerListHeaderAndFooter() {}
     override fun getPlayerListHeader(): Component = Component.empty()
     override fun getPlayerListFooter(): Component = Component.empty()
-    override fun getTabList(): TabList = throw UnsupportedOperationException("TabList not implemented")
+    override fun getTabList(): TabList = tabList
 
     override fun disconnect(reason: Component) {
         val text = PlainTextComponentSerializer.plainText().serialize(reason)
@@ -111,5 +118,85 @@ class VelocityPlayerShim(
     override fun sendMessage(message: Component) {
         val json = GsonComponentSerializer.gson().serialize(message)
         vectorPlayer.sendMessage(json)
+    }
+
+    private class VelocityPlayerSettings : PlayerSettings {
+        override fun getLocale(): Locale = Locale.US
+        override fun getViewDistance(): Byte = 10
+        override fun getChatMode(): PlayerSettings.ChatMode = PlayerSettings.ChatMode.SHOWN
+        override fun hasChatColors(): Boolean = true
+        override fun getSkinParts(): SkinParts = SkinParts(0x7F.toByte())
+        override fun getMainHand(): PlayerSettings.MainHand = PlayerSettings.MainHand.RIGHT
+        override fun isClientListingAllowed(): Boolean = true
+    }
+
+    private class VelocityTabList : TabList {
+        private val entries = mutableMapOf<UUID, TabListEntry>()
+        override fun setHeaderAndFooter(header: Component, footer: Component) {}
+        override fun clearHeaderAndFooter() {}
+        override fun addEntry(entry: TabListEntry) { entries[entry.profile.id] = entry }
+        override fun removeEntry(uuid: UUID): Optional<TabListEntry> = Optional.ofNullable(entries.remove(uuid))
+        override fun containsEntry(uuid: UUID): Boolean = entries.containsKey(uuid)
+        override fun getEntry(uuid: UUID): Optional<TabListEntry> = Optional.ofNullable(entries[uuid])
+        override fun getEntries(): MutableCollection<TabListEntry> = entries.values
+        override fun clearAll() { entries.clear() }
+        override fun buildEntry(profile: GameProfile, displayName: Component?, latency: Int, gameMode: Int, chatSession: ChatSession?, listed: Boolean): TabListEntry {
+            return VelocityTabListEntry(this, profile, displayName, latency, gameMode, chatSession, listed)
+        }
+    }
+
+    private class VelocityTabListEntry(
+        private val list: TabList,
+        private val profile: GameProfile,
+        private var displayName: Component?,
+        private var latency: Int,
+        private var gameMode: Int,
+        private val chatSession: ChatSession?,
+        private var listed: Boolean
+    ) : TabListEntry {
+        override fun getTabList(): TabList = list
+        override fun getProfile(): GameProfile = profile
+        override fun getDisplayNameComponent(): Optional<Component> = Optional.ofNullable(displayName)
+        override fun setDisplayName(displayName: Component?): TabListEntry { this.displayName = displayName; return this }
+        override fun getLatency(): Int = latency
+        override fun setLatency(latency: Int): TabListEntry { this.latency = latency; return this }
+        override fun getGameMode(): Int = gameMode
+        override fun setGameMode(gameMode: Int): TabListEntry { this.gameMode = gameMode; return this }
+        override fun getChatSession(): ChatSession? = chatSession
+        override fun isListed(): Boolean = listed
+        override fun setListed(listed: Boolean): TabListEntry { this.listed = listed; return this }
+        override fun getIdentifiedKey(): com.velocitypowered.api.proxy.crypto.IdentifiedKey? = null
+    }
+
+    private class VelocityConnectionRequestBuilder(
+        private val player: VelocityPlayerShim,
+        private val server: RegisteredServer
+    ) : ConnectionRequestBuilder {
+        override fun getServer(): RegisteredServer = server
+        override fun connect(): CompletableFuture<ConnectionRequestBuilder.Result> {
+            val vectorServer = (server as? VelocityRegisteredServerShim)?.backendServer ?: return CompletableFuture.failedFuture(IllegalArgumentException("Invalid server"))
+            val scope = player.vectorServer?.coroutineScope ?: kotlinx.coroutines.GlobalScope
+
+            return scope.future {
+                val success = player.vectorPlayer.connect(vectorServer)
+                if (success) VelocityConnectionResult(ConnectionRequestBuilder.Status.SUCCESS, server)
+                else VelocityConnectionResult(ConnectionRequestBuilder.Status.CONNECTION_CANCELLED, server)
+            }
+        }
+
+        override fun connectWithIndication(): CompletableFuture<Boolean> {
+            return connect().thenApply { it.status == ConnectionRequestBuilder.Status.SUCCESS }
+        }
+
+        override fun fireAndForget(): Unit { connect() }
+    }
+
+    private class VelocityConnectionResult(
+        private val status: ConnectionRequestBuilder.Status,
+        private val server: RegisteredServer
+    ) : ConnectionRequestBuilder.Result {
+        override fun getStatus(): ConnectionRequestBuilder.Status = status
+        override fun getReasonComponent(): Optional<Component> = Optional.empty()
+        override fun getAttemptedConnection(): RegisteredServer = server
     }
 }

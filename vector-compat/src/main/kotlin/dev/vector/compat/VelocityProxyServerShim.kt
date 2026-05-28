@@ -70,12 +70,19 @@ class VelocityProxyServerShim(
             .map { VelocityRegisteredServerShim(it, vectorServer) }
 
     override fun createRawRegisteredServer(serverInfo: ServerInfo): RegisteredServer =
-        throw UnsupportedOperationException("createRawRegisteredServer not implemented")
+        VelocityRegisteredServerShim(
+            vectorServer.registerServer(serverInfo.name, serverInfo.address),
+            vectorServer
+        )
 
-    override fun registerServer(serverInfo: ServerInfo): RegisteredServer =
-        throw UnsupportedOperationException("registerServer not implemented")
+    override fun registerServer(serverInfo: ServerInfo): RegisteredServer {
+        val server = vectorServer.registerServer(serverInfo.name, serverInfo.address)
+        return VelocityRegisteredServerShim(server, vectorServer)
+    }
 
-    override fun unregisterServer(serverInfo: ServerInfo) {}
+    override fun unregisterServer(serverInfo: ServerInfo) {
+        vectorServer.unregisterServer(serverInfo.name)
+    }
 
     override fun getConsoleCommandSource(): ConsoleCommandSource = console
 

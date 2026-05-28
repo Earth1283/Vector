@@ -8,6 +8,8 @@ import dev.vector.api.event.EventBus
 import dev.vector.api.storage.StorageBackend
 import dev.vector.compat.VelocityCommandManagerShim
 import dev.vector.compat.VelocityCommandManagerShimDelegator
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.GlobalScope
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.util.UUID
@@ -22,6 +24,7 @@ class VelocityCommandManagerTest {
         override val storage: StorageBackend get() = throw UnsupportedOperationException()
         override val players: Collection<VectorPlayer> = emptyList()
         override val servers: Collection<dev.vector.api.BackendServer> = emptyList()
+        override val coroutineScope: CoroutineScope get() = GlobalScope
         override fun getPlayer(uuid: UUID): VectorPlayer? = null
         override fun getPlayer(username: String): VectorPlayer? = null
         
@@ -31,6 +34,14 @@ class VelocityCommandManagerTest {
         
         override fun unregisterCommands(pluginId: String) {
             registeredCommands.entries.removeIf { it.value.first == pluginId }
+        }
+
+        override fun registerServer(name: String, address: java.net.InetSocketAddress): dev.vector.api.BackendServer {
+            throw UnsupportedOperationException()
+        }
+
+        override fun unregisterServer(name: String) {
+            throw UnsupportedOperationException()
         }
     }
 

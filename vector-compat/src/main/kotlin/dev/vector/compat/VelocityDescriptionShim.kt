@@ -12,9 +12,9 @@ class VelocityDescriptionShim(
 
     override fun getId(): String = manifest.id
 
-    override fun getName(): Optional<String> = Optional.ofNullable(manifest.name ?: manifest.id)
+    override fun getName(): Optional<String> = Optional.ofNullable(manifest.name)
 
-    override fun getVersion(): Optional<String> = Optional.ofNullable(manifest.version ?: "1.0.0")
+    override fun getVersion(): Optional<String> = Optional.ofNullable(manifest.version)
 
     override fun getDescription(): Optional<String> = Optional.ofNullable(manifest.description)
 

@@ -8,4 +8,5 @@ interface VectorPlayer {
     val currentServer: BackendServer?
     fun disconnect(reason: String = "Disconnected")
     fun sendMessage(jsonText: String)
+    suspend fun connect(server: BackendServer): Boolean
 }

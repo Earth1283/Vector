@@ -163,6 +163,9 @@ class BackendLoginSessionHandler(
 
         player.connection.setAutoReading(true)
 
+        player.pendingConnection?.complete(true)
+        player.pendingConnection = null
+
         player.server.proxyScope.launch {
             player.server.eventBus.fire(PlayerJoinEvent(player))
         }

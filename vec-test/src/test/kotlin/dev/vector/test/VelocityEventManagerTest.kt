@@ -11,6 +11,8 @@ import dev.vector.api.event.EventPriority
 import dev.vector.api.event.VectorEvent
 import dev.vector.api.storage.StorageBackend
 import dev.vector.compat.VelocityEventManagerShim
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -31,10 +33,18 @@ class VelocityEventManagerTest {
         override val storage: StorageBackend get() = throw UnsupportedOperationException()
         override val players: Collection<VectorPlayer> = emptyList()
         override val servers: Collection<dev.vector.api.BackendServer> = emptyList()
+        override val coroutineScope: CoroutineScope get() = GlobalScope
         override fun getPlayer(uuid: UUID): VectorPlayer? = null
         override fun getPlayer(username: String): VectorPlayer? = null
         override fun registerCommand(name: String, pluginId: String, handler: suspend (List<String>) -> Unit) {}
         override fun unregisterCommands(pluginId: String) {}
+        override fun registerServer(name: String, address: java.net.InetSocketAddress): dev.vector.api.BackendServer {
+            throw UnsupportedOperationException()
+        }
+
+        override fun unregisterServer(name: String) {
+            throw UnsupportedOperationException()
+        }
     }
 
     @Test
