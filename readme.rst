@@ -120,7 +120,8 @@ Build a fat JAR
 
 Produces a single self-contained JAR (~30 MB) with all dependencies
 bundled. No Gradle or JDK installation required on the target machine
-beyond a JRE 21+.
+beyond a JRE 21+. You can simply launch it with java -jar on the machine
+or apply custom JVM arguments.
 
 Run from the assembled distribution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
