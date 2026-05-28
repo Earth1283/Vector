@@ -105,5 +105,37 @@ class VelocityProxyServerShim(
     override fun getChannelRegistrar(): ChannelRegistrar = registrar
 
     override fun createResourcePackBuilder(url: String): ResourcePackInfo.Builder =
-        throw UnsupportedOperationException("createResourcePackBuilder not implemented")
+        VelocityResourcePackBuilder(url)
+
+    private class VelocityResourcePack(
+        private val url: String,
+        private val id: UUID,
+        private val hash: ByteArray?,
+        private val prompt: Component?,
+        private val force: Boolean
+    ) : ResourcePackInfo {
+        override fun getId(): UUID = id
+        override fun getUrl(): String = url
+        override fun getPrompt(): Component? = prompt
+        override fun getShouldForce(): Boolean = force
+        override fun getHash(): ByteArray? = hash
+        override fun getOrigin(): ResourcePackInfo.Origin = ResourcePackInfo.Origin.PLUGIN_ON_PROXY
+        override fun getOriginalOrigin(): ResourcePackInfo.Origin = ResourcePackInfo.Origin.PLUGIN_ON_PROXY
+        override fun asBuilder(): ResourcePackInfo.Builder = VelocityResourcePackBuilder(url).setId(id).setHash(hash).setPrompt(prompt).setShouldForce(force)
+        override fun asBuilder(url: String): ResourcePackInfo.Builder = VelocityResourcePackBuilder(url).setId(id).setHash(hash).setPrompt(prompt).setShouldForce(force)
+        override fun asResourcePackRequest(): net.kyori.adventure.resource.ResourcePackRequest = throw UnsupportedOperationException()
+    }
+
+    private class VelocityResourcePackBuilder(private val url: String) : ResourcePackInfo.Builder {
+        private var id: UUID = UUID.randomUUID()
+        private var hash: ByteArray? = null
+        private var prompt: Component? = null
+        private var force: Boolean = false
+
+        override fun setId(id: UUID): ResourcePackInfo.Builder { this.id = id; return this }
+        override fun setShouldForce(force: Boolean): ResourcePackInfo.Builder { this.force = force; return this }
+        override fun setHash(hash: ByteArray?): ResourcePackInfo.Builder { this.hash = hash; return this }
+        override fun setPrompt(prompt: Component?): ResourcePackInfo.Builder { this.prompt = prompt; return this }
+        override fun build(): ResourcePackInfo = VelocityResourcePack(url, id, hash, prompt, force)
+    }
 }
