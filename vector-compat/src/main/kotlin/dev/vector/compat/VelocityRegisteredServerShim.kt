@@ -37,14 +37,11 @@ class VelocityRegisteredServerShim(
     override fun ping(pingOptions: PingOptions): CompletableFuture<ServerPing> {
         val scope = vectorServer.coroutineScope
         return scope.future {
-            val t0 = System.currentTimeMillis()
             val up = withContext(Dispatchers.IO) {
                 runCatching {
                     Socket().use { it.connect(backendServer.address, 2000) }
                 }.isSuccess
             }
-            val latency = System.currentTimeMillis() - t0
-            
             if (up) {
                 ServerPing(
                     ServerPing.Version(ProtocolVersion.MAXIMUM_VERSION.protocol, ProtocolVersion.MAXIMUM_VERSION.name),

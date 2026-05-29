@@ -30,7 +30,7 @@ import java.util.concurrent.CompletableFuture
 
 class VelocityPlayerShim(
     val vectorPlayer: dev.vector.api.VectorPlayer,
-    val vectorServer: dev.vector.api.ProxyServer? = null,
+    val vectorServer: dev.vector.api.ProxyServer,
 ) : Player {
 
     private val _identity: Identity = Identity.identity(vectorPlayer.uuid)
@@ -175,9 +175,7 @@ class VelocityPlayerShim(
         override fun getServer(): RegisteredServer = server
         override fun connect(): CompletableFuture<ConnectionRequestBuilder.Result> {
             val vectorServer = (server as? VelocityRegisteredServerShim)?.backendServer ?: return CompletableFuture.failedFuture(IllegalArgumentException("Invalid server"))
-            val scope = player.vectorServer?.coroutineScope ?: kotlinx.coroutines.GlobalScope
-
-            return scope.future {
+            return player.vectorServer.coroutineScope.future {
                 val success = player.vectorPlayer.connect(vectorServer)
                 if (success) VelocityConnectionResult(ConnectionRequestBuilder.Status.SUCCESS, server)
                 else VelocityConnectionResult(ConnectionRequestBuilder.Status.CONNECTION_CANCELLED, server)
