@@ -6,5 +6,6 @@ include(
     "vector-compat",
     "vector-proxy",
     "hello-world-plugin",
-    "vec-test"
+    "vec-test",
+    "vectest-plugin"
 )
