@@ -7,6 +7,7 @@ import dev.vector.proxy.protocol.ProtocolVersion
 import dev.vector.proxy.protocol.util.readString
 import dev.vector.proxy.protocol.util.readVarInt
 import io.netty.buffer.ByteBuf
+import kotlinx.coroutines.asContextElement
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 
@@ -48,7 +49,7 @@ class ClientPlaySessionHandler(private val player: VectorPlayer) : SessionHandle
                     val arg = parts.getOrNull(1)
 
                     if (player.server.hasCommand(cmdName)) {
-                        player.server.proxyScope.launch {
+                        player.server.proxyScope.launch(dev.vector.compat.currentCommandSender.asContextElement(player.username)) {
                             player.server.handleCommand(cmdName, arg)
                         }
                         return true

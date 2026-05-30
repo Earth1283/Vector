@@ -55,3 +55,4 @@ vector.toml
 .kotlin/
 run/
 apt-mc/
+*.db

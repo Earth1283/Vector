@@ -11,6 +11,9 @@ import com.velocitypowered.api.command.RawCommand
 import com.velocitypowered.api.command.SimpleCommand
 import dev.vector.api.ProxyServer
 import java.util.concurrent.CompletableFuture
+import kotlinx.coroutines.asContextElement
+
+val currentCommandSender = ThreadLocal<String?>()
 
 class VelocityCommandManagerShim(private val vectorServer: ProxyServer) : CommandManager {
 
@@ -43,7 +46,17 @@ class VelocityCommandManagerShim(private val vectorServer: ProxyServer) : Comman
 
         for (alias in aliases) {
             vectorServer.registerCommand(alias, pluginId, { args ->
-                val source = VelocityConsoleCommandSource()
+                val senderName = currentCommandSender.get()
+                val source = if (senderName != null) {
+                    val vectorPlayer = vectorServer.getPlayer(senderName)
+                    if (vectorPlayer != null) {
+                        VelocityPlayerShim(vectorPlayer, vectorServer)
+                    } else {
+                        VelocityConsoleCommandSource()
+                    }
+                } else {
+                    VelocityConsoleCommandSource()
+                }
                 when (command) {
                     is RawCommand -> {
                         val invocation = VelocityRawInvocation(source, alias, args.joinToString(" "))
@@ -64,7 +77,17 @@ class VelocityCommandManagerShim(private val vectorServer: ProxyServer) : Comman
                     }
                 }
             }, { args ->
-                val source = VelocityConsoleCommandSource()
+                val senderName = currentCommandSender.get()
+                val source = if (senderName != null) {
+                    val vectorPlayer = vectorServer.getPlayer(senderName)
+                    if (vectorPlayer != null) {
+                        VelocityPlayerShim(vectorPlayer, vectorServer)
+                    } else {
+                        VelocityConsoleCommandSource()
+                    }
+                } else {
+                    VelocityConsoleCommandSource()
+                }
                 when (command) {
                     is RawCommand -> {
                         val invocation = VelocityRawInvocation(source, alias, args.joinToString(" "))
