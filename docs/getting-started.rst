@@ -54,6 +54,8 @@ Project Layout
        Proxy["vector-proxy\nCore implementation\nNetty · codec · plugins · state"]
        HW["hello-world-plugin\nExample plugin\n(compileOnly: vector-api-kotlin)"]
        VT["vec-test\nJUnit 5 integration tests\ncompat shim coverage"]
+       VP["vectest-plugin\nLive 138-endpoint harness\nruns at proxy startup"]
+       MCI["modrinth-ci\nNightly CI harness\nModrinth top-20 Velocity plugins"]
 
        Root --> API
        Root --> AK
@@ -61,12 +63,16 @@ Project Layout
        Root --> Proxy
        Root --> HW
        Root --> VT
+       Root --> VP
+       Root --> MCI
        API --> AK
        API --> Compat
        AK --> Proxy
        Compat --> Proxy
        AK -.->|compileOnly| HW
        Compat -.->|testImplementation| VT
+       AK -.->|compileOnly| VP
+       Compat -.->|compileOnly| VP
 
        style API fill:#d9edf7,stroke:#31708f
        style AK fill:#dff0d8,stroke:#3c763d
@@ -245,10 +251,10 @@ Build Order
      - ✓
    * - 7.8
      - VecTest plugin — live 138-endpoint API coverage
-     -
+     - ✓
    * - 7.9
-     - apt-mc / Modrinth nightly CI harness
-     -
+     - Modrinth nightly CI harness (modrinth-ci)
+     - ✓
 
 Writing Your First Plugin
 --------------------------

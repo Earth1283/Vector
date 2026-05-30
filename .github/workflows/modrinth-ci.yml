@@ -1,0 +1,65 @@
+name: Modrinth CI
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # 02:00 UTC nightly
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Number of top Velocity plugins to test"
+        default: "20"
+      timeout:
+        description: "Harness timeout in seconds"
+        default: "45"
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  modrinth-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle.kts', '**/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: Build Vector proxy
+        run: ./gradlew :vector-proxy:shadowJar --no-daemon
+
+      - name: Build modrinth-ci harness
+        run: ./gradlew :modrinth-ci:shadowJar --no-daemon
+
+      - name: Cache downloaded plugin JARs
+        uses: actions/cache@v4
+        with:
+          path: build/ci-plugins
+          key: modrinth-ci-plugins-${{ github.run_id }}
+          restore-keys: modrinth-ci-plugins-
+
+      - name: Run Modrinth CI harness
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          PROXY_JAR=$(ls vector-proxy/build/libs/*.jar | grep -v sources | head -1)
+          echo "Proxy JAR: $PROXY_JAR"
+          java -jar modrinth-ci/build/libs/modrinth-ci.jar \
+            --proxy-jar "$PROXY_JAR" \
+            --limit "${{ github.event.inputs.limit || '20' }}" \
+            --timeout "${{ github.event.inputs.timeout || '45' }}"

@@ -7,5 +7,6 @@ include(
     "vector-proxy",
     "hello-world-plugin",
     "vec-test",
-    "vectest-plugin"
+    "vectest-plugin",
+    "modrinth-ci"
 )
