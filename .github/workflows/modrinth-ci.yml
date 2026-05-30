@@ -2,7 +2,7 @@ name: Modrinth CI
 
 on:
   schedule:
-    - cron: "0 2 * * *"   # 02:00 UTC nightly
+    - cron: "0 0 * * *"   # 00:00 UTC nightly
   workflow_dispatch:
     inputs:
       limit:
@@ -39,12 +39,6 @@ jobs:
           key: gradle-${{ hashFiles('**/*.gradle.kts', '**/gradle-wrapper.properties') }}
           restore-keys: gradle-
 
-      - name: Build Vector proxy
-        run: ./gradlew :vector-proxy:shadowJar --no-daemon
-
-      - name: Build modrinth-ci harness
-        run: ./gradlew :modrinth-ci:shadowJar --no-daemon
-
       - name: Cache downloaded plugin JARs
         uses: actions/cache@v4
         with:
@@ -57,9 +51,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          PROXY_JAR=$(ls vector-proxy/build/libs/*.jar | grep -v sources | head -1)
-          echo "Proxy JAR: $PROXY_JAR"
-          java -jar modrinth-ci/build/libs/modrinth-ci.jar \
-            --proxy-jar "$PROXY_JAR" \
-            --limit "${{ github.event.inputs.limit || '20' }}" \
-            --timeout "${{ github.event.inputs.timeout || '45' }}"
+          ./gradlew ci \
+            -Pci.limit="${{ github.event.inputs.limit || '20' }}" \
+            -Pci.timeout="${{ github.event.inputs.timeout || '45' }}" \
+            --no-daemon

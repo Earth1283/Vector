@@ -23,8 +23,19 @@ tasks.build {
     dependsOn(tasks.shadowJar)
 }
 
-tasks.named("run") {
+tasks.named<JavaExec>("run") {
     mustRunAfter(":vector-proxy:shadowJar")
+
+    val argsList = mutableListOf<String>()
+    if (project.hasProperty("ci.limit")) {
+        argsList.add("--limit")
+        argsList.add(project.property("ci.limit").toString())
+    }
+    if (project.hasProperty("ci.timeout")) {
+        argsList.add("--timeout")
+        argsList.add(project.property("ci.timeout").toString())
+    }
+    args(argsList)
 }
 
 // shadowJar uses archiveClassifier="" so its output path collides with the plain jar.
