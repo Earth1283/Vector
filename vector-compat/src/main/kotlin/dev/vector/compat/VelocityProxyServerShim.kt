@@ -123,7 +123,8 @@ class VelocityProxyServerShim(
         override fun getOriginalOrigin(): ResourcePackInfo.Origin = ResourcePackInfo.Origin.PLUGIN_ON_PROXY
         override fun asBuilder(): ResourcePackInfo.Builder = VelocityResourcePackBuilder(url).setId(id).setHash(hash).setPrompt(prompt).setShouldForce(force)
         override fun asBuilder(url: String): ResourcePackInfo.Builder = VelocityResourcePackBuilder(url).setId(id).setHash(hash).setPrompt(prompt).setShouldForce(force)
-        override fun asResourcePackRequest(): net.kyori.adventure.resource.ResourcePackRequest = throw UnsupportedOperationException()
+        override fun asResourcePackRequest(): net.kyori.adventure.resource.ResourcePackRequest =
+            buildResourcePackRequest(id, url, hash, prompt, force)
     }
 
     private class VelocityResourcePackBuilder(private val url: String) : ResourcePackInfo.Builder {

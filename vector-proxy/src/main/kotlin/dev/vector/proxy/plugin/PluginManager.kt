@@ -73,7 +73,7 @@ class PluginManager(private val server: VectorServer) {
             val eventMgr = VelocityEventManagerShim(server)
             val cmdMgr = VelocityCommandManagerShim(server)
             val sched = VelocitySchedulerShim()
-            val pluginMgr = VelocityPluginManagerShim(server)
+            val pluginMgr = VelocityPluginManagerShim(server) { _plugins.toList() }
             velocityProxyShim = VelocityProxyServerShim(server, eventMgr, cmdMgr, sched, pluginMgr)
         }
 

@@ -17,3 +17,11 @@ allprojects {
 tasks.register("shadowJar") {
     dependsOn(":vector-proxy:shadowJar")
 }
+
+tasks.register("ci") {
+    group = "verification"
+    description = "Runs the Modrinth CI compatibility harness."
+    dependsOn(":vector-proxy:shadowJar")
+    dependsOn(":modrinth-ci:run")
+}
+

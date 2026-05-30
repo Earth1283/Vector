@@ -22,3 +22,18 @@ tasks.shadowJar {
 tasks.build {
     dependsOn(tasks.shadowJar)
 }
+
+tasks.named("run") {
+    mustRunAfter(":vector-proxy:shadowJar")
+}
+
+// shadowJar uses archiveClassifier="" so its output path collides with the plain jar.
+// The application plugin's distribution and start-script tasks consume that file without
+// declaring a dependency, which trips Gradle's task-input validation. Wire every such
+// task to both producers so ordering is well-defined regardless of which jar they read.
+tasks.withType<org.gradle.api.tasks.application.CreateStartScripts>().configureEach {
+    dependsOn(tasks.jar, tasks.shadowJar)
+}
+tasks.withType<AbstractArchiveTask>().configureEach {
+    if (name != "jar" && name != "shadowJar") dependsOn(tasks.jar, tasks.shadowJar)
+}

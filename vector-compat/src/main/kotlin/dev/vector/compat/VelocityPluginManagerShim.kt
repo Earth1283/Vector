@@ -1,15 +1,24 @@
 package dev.vector.compat
 
 import com.velocitypowered.api.plugin.PluginContainer
+import com.velocitypowered.api.plugin.PluginDescription
 import com.velocitypowered.api.plugin.PluginManager
+import com.velocitypowered.api.plugin.meta.PluginDependency
 import java.nio.file.Path
 import java.util.IdentityHashMap
 import java.util.Optional
 
-class VelocityPluginManagerShim(private val vectorServer: dev.vector.api.ProxyServer) : PluginManager {
+class VelocityPluginManagerShim(
+    private val vectorServer: dev.vector.api.ProxyServer,
+    // Lazily supplies the proxy's loaded native plugins. A lambda is used so this
+    // module needs no compile dependency on vector-proxy (which would be a cycle),
+    // and so the set stays current as plugins continue to load.
+    private val nativePlugins: () -> Collection<dev.vector.api.plugin.PluginContainer> = { emptyList() },
+) : PluginManager {
 
     private val byId = LinkedHashMap<String, PluginContainer>()
     private val byInstance = IdentityHashMap<Any, PluginContainer>()
+    private val nativeWrapped = LinkedHashMap<String, PluginContainer>()
 
     fun registerPlugin(container: VelocityContainerShim) {
         byId[container.getDescription().getId()] = container
@@ -20,18 +29,22 @@ class VelocityPluginManagerShim(private val vectorServer: dev.vector.api.ProxySe
         Optional.ofNullable(byInstance[instance])
 
     override fun getPlugin(id: String): Optional<PluginContainer> {
-        val shim = byId[id]
-        if (shim != null) return Optional.of(shim)
-        
-        // Try to find a native plugin and wrap it
-        // This is a bit complex because we need a VelocityDescription for it.
-        // We'll leave it as a TODO for now if it's not strictly needed for this bug.
-        return Optional.empty()
+        byId[id]?.let { return Optional.of(it) }
+        return Optional.ofNullable(wrapNative(id))
     }
 
-    override fun getPlugins(): Collection<PluginContainer> = byId.values.toList()
+    override fun getPlugins(): Collection<PluginContainer> {
+        // Velocity plugins expect to see every loaded plugin, native ones included.
+        val all = LinkedHashMap<String, PluginContainer>(byId)
+        for (native in nativePlugins()) {
+            val nid = native.manifest.id
+            if (nid !in all) wrapNative(nid)?.let { all[nid] = it }
+        }
+        return all.values.toList()
+    }
 
-    override fun isLoaded(id: String): Boolean = byId.containsKey(id)
+    override fun isLoaded(id: String): Boolean =
+        byId.containsKey(id) || nativePlugins().any { it.manifest.id == id }
 
     override fun addToClasspath(plugin: Any, path: Path) {
         val container = fromInstance(plugin).orElse(null) ?: return
@@ -47,5 +60,30 @@ class VelocityPluginManagerShim(private val vectorServer: dev.vector.api.ProxySe
                 addUrl.invoke(cl, path.toUri().toURL())
             } catch (_: Exception) {}
         }
+    }
+
+    // Wraps a native Vector plugin as a Velocity PluginContainer so legacy plugins can
+    // discover it via the PluginManager. Wrappers are cached so identity stays stable.
+    private fun wrapNative(id: String): PluginContainer? {
+        nativeWrapped[id]?.let { return it }
+        val native = nativePlugins().find { it.manifest.id == id } ?: return null
+        val container = VelocityContainerShim(NativePluginDescription(native.manifest))
+        container.setInstance(native.instance)
+        byInstance[native.instance] = container
+        nativeWrapped[id] = container
+        return container
+    }
+
+    // Adapts a native Vector PluginManifest to a Velocity PluginDescription.
+    // PluginManifest carries no description/url/author metadata, so those stay empty.
+    private class NativePluginDescription(
+        private val manifest: dev.vector.api.plugin.PluginManifest,
+    ) : PluginDescription {
+        override fun getId(): String = manifest.id
+        override fun getVersion(): Optional<String> = Optional.of(manifest.version)
+        override fun getDependencies(): Collection<PluginDependency> =
+            manifest.hardDeps.map { PluginDependency(it, null, false) } +
+                manifest.softDeps.map { PluginDependency(it, null, true) }
+        override fun getSource(): Optional<Path> = Optional.empty()
     }
 }

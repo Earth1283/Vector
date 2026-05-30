@@ -8,7 +8,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 class VelocityContainerShim(
-    private val description: VelocityDescriptionShim,
+    private val description: PluginDescription,
 ) : PluginContainer {
 
     private var instance: Any? = null
