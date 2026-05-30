@@ -23,7 +23,11 @@ class PluginClassLoader(jarUrl: URL, parent: ClassLoader) : URLClassLoader(array
     }
 
     fun findClassDirect(name: String): Class<*> {
-        return findClass(name)
+        return findLoadedClass(name) ?: findClass(name)
+    }
+
+    public override fun addURL(url: URL) {
+        super.addURL(url)
     }
 
     fun addJar(url: URL) {
@@ -35,6 +39,8 @@ class PluginClassLoader(jarUrl: URL, parent: ClassLoader) : URLClassLoader(array
             name.startsWith("dev.vector.api.") ||
             name.startsWith("com.velocitypowered.api.") ||
             name.startsWith("net.kyori.adventure.") ||
+            name.startsWith("net.kyori.examination.") ||
+            name.startsWith("net.kyori.option.") ||
             name.startsWith("com.google.gson.") ||
             name.startsWith("com.google.inject.") ||
             name.startsWith("com.google.common.") ||

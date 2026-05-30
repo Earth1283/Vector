@@ -44,9 +44,14 @@ class EventBusImpl : EventBus {
 
     override suspend fun <T : VectorEvent> fire(event: T): T {
         val list = handlers[event::class] ?: return event
+        val logger = org.slf4j.LoggerFactory.getLogger(EventBusImpl::class.java)
         for (entry in list) {
             if (event is CancellableEvent && event.isCancelled && entry.priority != EventPriority.MONITOR) continue
-            entry.handler(event)
+            try {
+                entry.handler(event)
+            } catch (e: Throwable) {
+                logger.error("Error firing event {} for plugin {}: {}", event::class.simpleName, entry.pluginId, e.message ?: e.toString(), e)
+            }
         }
         return event
     }

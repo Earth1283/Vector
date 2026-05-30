@@ -32,6 +32,7 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.5.6")
     implementation("org.flywaydb:flyway-core:9.22.3")
     runtimeOnly("org.xerial:sqlite-jdbc:3.46.0.0")
+    implementation("net.kyori:option:1.1.0")
 }
 
 tasks.shadowJar {

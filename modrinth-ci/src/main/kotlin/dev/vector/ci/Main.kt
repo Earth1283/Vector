@@ -86,6 +86,16 @@ fun main(args: Array<String>) {
         return
     }
 
+    // Clean up cached jars that are not part of the current run
+    val activeSlugs = downloaded.map { it.slug }.toSet()
+    downloadDir.toFile().listFiles { f -> f.name.endsWith(".jar") }?.forEach { file ->
+        val slug = file.nameWithoutExtension
+        if (slug !in activeSlugs) {
+            println("[VecCI] Cleaned up unused cached jar: ${file.name}")
+            file.delete()
+        }
+    }
+
     // - Step 3: Run harness
     println("[VecCI] Starting Vector harness (timeout=${timeoutSecs}s)...")
     val result = runHarness(jar, downloadDir, timeoutSecs)

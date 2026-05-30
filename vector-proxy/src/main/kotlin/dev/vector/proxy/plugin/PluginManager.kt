@@ -159,8 +159,8 @@ class PluginManager(private val server: VectorServer) {
             val clazz = loader.loadClass(node.manifest.entrypoint)
             val instance = clazz.getDeclaredConstructor().newInstance()
             PluginContainer(node.manifest, instance, CoroutineScope(SupervisorJob() + Dispatchers.Default), loader)
-        } catch (e: Exception) {
-            logger.error("Failed to instantiate plugin {}: {}", node.manifest.id, e.message)
+        } catch (e: Throwable) {
+            logger.error("Failed to instantiate plugin {}: {}", node.manifest.id, e.message ?: e.toString())
             null
         }
     }

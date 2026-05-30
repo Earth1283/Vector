@@ -41,8 +41,9 @@ class VelocityPluginLoader(
 
         val instance = try {
             instantiate(jarPath, manifest.main, description, container, classLoader)
-        } catch (e: Exception) {
-            logger.error("Failed to instantiate velocity plugin {} from {}: {}", manifest.id, jarPath.fileName, e.message)
+        } catch (e: Throwable) {
+            val cause = if (e is java.lang.reflect.InvocationTargetException) e.cause ?: e else e
+            logger.error("Failed to instantiate velocity plugin {} from {}: {}", manifest.id, jarPath.fileName, cause.message ?: cause.toString(), cause)
             return null
         }
 
@@ -108,8 +109,26 @@ class VelocityPluginLoader(
             put(PluginDescription::class.java, description)
             put(Logger::class.java, LoggerFactory.getLogger(description.getId()))
             put(ComponentLogger::class.java, ComponentLogger.logger(description.getId()))
+            put(java.util.logging.Logger::class.java, java.util.logging.Logger.getLogger(description.getId()))
             put(Path::class.java, dataDir)
             put(ExecutorService::class.java, container.getExecutorService())
+        }
+
+        try {
+            val injector = com.google.inject.Guice.createInjector(object : com.google.inject.AbstractModule() {
+                override fun configure() {
+                    for ((c, instance) in bindings) {
+                        if (c == java.util.logging.Logger::class.java) continue
+                        @Suppress("UNCHECKED_CAST")
+                        bind(c as Class<Any>).toInstance(instance)
+                    }
+                    bind(Path::class.java).annotatedWith(DataDirectory::class.java).toInstance(dataDir)
+                }
+            })
+            return injector.getInstance(clazz)
+        } catch (guiceEx: Throwable) {
+            logger.warn("Guice instantiation failed for legacy plugin {}, falling back to reflection: {}", 
+                description.getId(), guiceEx.message ?: guiceEx.toString())
         }
 
         // Find the @Inject constructor, or fall back to a single constructor
@@ -123,12 +142,17 @@ class VelocityPluginLoader(
             if (annotation != null) {
                 dataDir
             } else {
-                bindings[param.type]
-                    ?: throw IllegalArgumentException("No binding for constructor parameter type ${param.type.name} in $mainClass")
+                val boundValue = bindings[param.type] 
+                    ?: bindings.entries.firstOrNull { param.type.isAssignableFrom(it.key) }?.value
+                boundValue ?: throw IllegalArgumentException("No binding for constructor parameter type ${param.type.name} in $mainClass")
             }
         }
 
-        val instance = ctor.newInstance(*args.toTypedArray())
+        val instance = try {
+            ctor.newInstance(*args.toTypedArray())
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            throw e.cause ?: e
+        }
 
         // Support field injection for legacy plugins (e.g. LuckPerms)
         var currentClass: Class<*>? = clazz
@@ -139,7 +163,7 @@ class VelocityPluginLoader(
                     val value = if (annotation != null) {
                         dataDir
                     } else {
-                        bindings[field.type]
+                        bindings[field.type] ?: bindings.entries.firstOrNull { field.type.isAssignableFrom(it.key) }?.value
                     }
 
                     if (value != null) {

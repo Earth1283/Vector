@@ -1,7 +1,9 @@
 package dev.vector.ci
 
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.TimeUnit
 import kotlin.io.path.writeText
@@ -44,7 +46,8 @@ fun runHarness(proxyJar: Path, pluginsDir: Path, timeoutSecs: Int = 30): Harness
     var ready   = false
     var crashed = false
 
-    val process = ProcessBuilder("java", "-jar", proxyJar.toAbsolutePath().toString())
+    val javaExec = findBestJavaExecutable()
+    val process = ProcessBuilder(javaExec, "-jar", proxyJar.toAbsolutePath().toString())
         .directory(workDir.toFile())
         .redirectErrorStream(true)
         .start()
@@ -54,6 +57,7 @@ fun runHarness(proxyJar: Path, pluginsDir: Path, timeoutSecs: Int = 30): Harness
     val readThread = Thread {
         process.inputStream.bufferedReader().useLines { seq ->
             for (line in seq) {
+                println("[Proxy] $line")
                 when {
                     line.contains("Vector is ready") -> ready = true
                     LOADED_RE.containsMatchIn(line)  -> {
@@ -96,7 +100,9 @@ fun runHarness(proxyJar: Path, pluginsDir: Path, timeoutSecs: Int = 30): Harness
 
 private fun isErrorLine(line: String): Boolean =
     line.contains(" ERROR ") ||
-    (line.contains("Exception") && (line.contains(": ") || line.trimStart().startsWith("at ")))
+    line.contains("Exception") ||
+    line.trimStart().startsWith("at ") ||
+    line.trimStart().startsWith("Caused by:")
 
 private fun isWarnLine(line: String): Boolean =
     line.contains(" WARN ") &&
@@ -109,3 +115,51 @@ private val ANSI_RE   = Regex("""\x1B\[[0-9;]*[A-Za-z]""")
 private fun stripAnsi(s: String) = ANSI_RE.replace(s, "").trim()
 
 private fun freePort(): Int = java.net.ServerSocket(0).use { it.localPort }
+
+private fun findBestJavaExecutable(): String {
+    val searchPaths = listOf(
+        "/home/codespace/java",
+        "/usr/local/sdkman/candidates/java",
+        "/usr/lib/jvm"
+    )
+
+    var bestJava = "java"
+    var bestVersionNum = 0.0
+
+    // First check the current JVM running the harness
+    val currentJavaHome = System.getProperty("java.home")
+    if (!currentJavaHome.isNullOrBlank()) {
+        val currentJava = Paths.get(currentJavaHome, "bin", "java").toString()
+        if (File(currentJava).exists()) {
+            bestJava = currentJava
+            bestVersionNum = System.getProperty("java.specification.version")?.toDoubleOrNull() ?: 0.0
+        }
+    }
+
+    // Scan installed versions to find the highest Java version
+    for (path in searchPaths) {
+        val dir = File(path)
+        if (!dir.exists() || !dir.isDirectory) continue
+
+        val children = dir.listFiles() ?: continue
+        for (child in children) {
+            if (!child.isDirectory) continue
+            if (child.name == "current" || child.name == "default") continue
+
+            val majorPart = child.name.split('.').firstOrNull()?.toDoubleOrNull()
+            if (majorPart != null) {
+                val javaExecFile = child.resolve("bin").resolve("java")
+                if (javaExecFile.exists() && javaExecFile.isFile && javaExecFile.canExecute()) {
+                    if (majorPart > bestVersionNum) {
+                        bestVersionNum = majorPart
+                        bestJava = javaExecFile.absolutePath
+                    }
+                }
+            }
+        }
+    }
+
+    println("[VecCI] Selected Java executable for Vector proxy: $bestJava (Java major version: $bestVersionNum)")
+    return bestJava
+}
+

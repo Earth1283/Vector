@@ -9,6 +9,8 @@ kotlin {
 dependencies {
     api(project(":vector-api"))
     api("com.velocitypowered:velocity-api:3.3.0-SNAPSHOT")
+    compileOnly("io.netty:netty-all:4.1.111.Final")
+    implementation("net.kyori:option:1.1.0")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("net.kyori:adventure-text-serializer-gson:4.17.0")
     implementation("net.kyori:adventure-text-serializer-plain:4.17.0")
