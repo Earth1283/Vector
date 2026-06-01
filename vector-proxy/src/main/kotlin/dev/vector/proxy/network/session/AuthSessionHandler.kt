@@ -43,6 +43,17 @@ class AuthSessionHandler(
                 }
 
                 val server = connection.server!!
+
+                // Reject a second concurrent session for the same account. Without this the
+                // later login overwrites the _players map entry, orphaning the first connection
+                // (a ghost that is never cleaned up) and corrupting disconnect bookkeeping.
+                if (server.getPlayer(profile.uuid) != null) {
+                    connection.closeWith(
+                        LoginDisconnectPacket("""{"text":"You are already connected to this proxy!","color":"red"}""")
+                    )
+                    return@execute
+                }
+
                 val player = VectorPlayer(profile, connection, server)
                 val initialServer = server.getInitialServer(connection.virtualHost)
 

@@ -11,10 +11,13 @@ import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.time.Duration
 import java.util.UUID
 
 object MojangAuth {
-    private val http = HttpClient.newHttpClient()
+    private val http = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(10))
+        .build()
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun verify(username: String, serverHash: String): GameProfile? = withContext(Dispatchers.IO) {
@@ -22,7 +25,9 @@ object MojangAuth {
         val url = "https://sessionserver.mojang.com/session/minecraft/hasJoined" +
                 "?username=$encodedUser&serverId=$serverHash"
 
-        val request = HttpRequest.newBuilder(URI(url)).GET().build()
+        val request = HttpRequest.newBuilder(URI(url))
+            .timeout(Duration.ofSeconds(10))
+            .GET().build()
         val response = http.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() != 200) return@withContext null

@@ -31,7 +31,9 @@ fun ByteBuf.writeVarInt(value: Int) {
 
 fun ByteBuf.readString(maxLength: Int = Short.MAX_VALUE.toInt()): String {
     val byteLength = readVarInt()
+    if (byteLength < 0) throw DecoderException("Negative string length: $byteLength")
     if (byteLength > maxLength * 4) throw DecoderException("String too long: $byteLength bytes")
+    if (byteLength > readableBytes()) throw DecoderException("String length $byteLength exceeds remaining ${readableBytes()} bytes")
     val bytes = ByteArray(byteLength)
     readBytes(bytes)
     val str = String(bytes, Charsets.UTF_8)
@@ -54,7 +56,9 @@ fun ByteBuf.writeUUID(uuid: UUID) {
 
 fun ByteBuf.readByteArray(maxLength: Int = 1048576): ByteArray {
     val length = readVarInt()
+    if (length < 0) throw DecoderException("Negative ByteArray length: $length")
     if (length > maxLength) throw DecoderException("ByteArray too long: $length > $maxLength")
+    if (length > readableBytes()) throw DecoderException("ByteArray length $length exceeds remaining ${readableBytes()} bytes")
     val bytes = ByteArray(length)
     readBytes(bytes)
     return bytes

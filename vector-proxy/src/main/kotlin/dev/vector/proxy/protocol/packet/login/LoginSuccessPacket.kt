@@ -11,6 +11,7 @@ import dev.vector.proxy.protocol.util.writeString
 import dev.vector.proxy.protocol.util.writeUUID
 import dev.vector.proxy.protocol.util.writeVarInt
 import io.netty.buffer.ByteBuf
+import io.netty.handler.codec.DecoderException
 import java.util.UUID
 
 class LoginSuccessPacket(
@@ -30,6 +31,11 @@ class LoginSuccessPacket(
         username = buf.readString(16)
         if (version.protocol >= ProtocolVersion.MINECRAFT_1_19_3.protocol && buf.isReadable) {
             val count = buf.readVarInt()
+            // Bound the count before List(count) pre-allocates a backing array of that size,
+            // otherwise a malicious backend can request a multi-GB allocation and OOM the proxy.
+            if (count < 0 || count > MAX_PROPERTIES) {
+                throw DecoderException("Illegal login property count: $count")
+            }
             properties = List(count) {
                 val name = buf.readString()
                 val value = buf.readString()
@@ -60,6 +66,8 @@ class LoginSuccessPacket(
     override fun handle(handler: SessionHandler) = handler.handle(this)
 
     companion object {
+        private const val MAX_PROPERTIES = 256
+
         fun from(profile: GameProfile, version: ProtocolVersion) = LoginSuccessPacket(
             uuid = profile.uuid,
             username = profile.username,

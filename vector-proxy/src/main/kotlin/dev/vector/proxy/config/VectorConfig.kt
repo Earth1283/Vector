@@ -16,6 +16,8 @@ data class VectorConfig(
     val routing: RoutingConfig = RoutingConfig(),
     val forwarding: ForwardingConfig = ForwardingConfig(),
     val compression: CompressionConfig = CompressionConfig(),
+    @SerialName("connection-limits")
+    val connectionLimits: ConnectionLimitsConfig = ConnectionLimitsConfig(),
     val storage: StorageConfig = StorageConfig(),
     val motd: MotdConfig = MotdConfig(),
     val threading: ThreadingConfig = ThreadingConfig(),
@@ -47,6 +49,14 @@ data class VectorConfig(
     @Serializable
     data class CompressionConfig(
         val threshold: Int = 256,
+    )
+
+    @Serializable
+    data class ConnectionLimitsConfig(
+        // Max concurrent connections from a single source IP. 0 = unlimited.
+        @SerialName("max-per-ip") val maxPerIp: Int = 16,
+        // Max concurrent connections proxy-wide. 0 = unlimited.
+        @SerialName("max-total")  val maxTotal: Int = 0,
     )
 
     @Serializable

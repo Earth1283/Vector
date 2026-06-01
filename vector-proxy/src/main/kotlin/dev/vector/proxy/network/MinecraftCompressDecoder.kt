@@ -31,6 +31,13 @@ class MinecraftCompressDecoder(val threshold: Int) : MessageToMessageDecoder<Byt
         val actualLength = inflater.inflate(decompressed)
         inflater.reset()
 
+        // The protocol guarantees dataLength is the exact uncompressed size. Reject a stream
+        // that inflates to fewer bytes (corrupt or lying header); over-sized streams cannot
+        // exceed the dataLength buffer and are already capped by MAX_DECOMPRESSED_SIZE.
+        if (actualLength != dataLength) {
+            throw DecoderException("Badly compressed packet: claimed dataLength=$dataLength but inflated $actualLength bytes")
+        }
+
         out.add(ctx.alloc().buffer(actualLength).writeBytes(decompressed, 0, actualLength))
     }
 

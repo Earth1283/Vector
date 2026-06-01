@@ -51,6 +51,20 @@ threshold = 256
 # threshold = 512   # less aggressive; good for high-CPU environments
 # threshold = -1    # disable compression entirely (e.g. LAN-only deployments)
 
+# Concurrent connection caps to blunt connection-flood / socket-exhaustion DoS.
+# These limit sockets held at once (the login read-timeout still bounds how long an
+# idle pre-login socket survives). A limit of 0 disables that particular check.
+#
+# max-per-ip - max simultaneous connections from one source IP. Keep generous if
+#              players share an IP (NAT, VPN, campus networks).
+# max-total  - max simultaneous connections proxy-wide. 0 = unlimited; set this to
+#              match the file-descriptor / memory headroom of your host.
+[connection-limits]
+max-per-ip = 16
+max-total  = 0
+# max-per-ip = 4      # strict: typical home users need only 1-2
+# max-total  = 2000   # cap total sockets on a small VPS
+
 # Shared SQLite database used by the proxy and plugins for persistent storage.
 # The file is created automatically on first start. The directory must exist.
 [storage]

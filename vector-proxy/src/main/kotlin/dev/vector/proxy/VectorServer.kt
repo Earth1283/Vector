@@ -10,6 +10,7 @@ import dev.vector.proxy.crypto.CryptoUtils
 import dev.vector.proxy.event.EventBusImpl
 import dev.vector.proxy.model.BackendServerInfo
 import dev.vector.proxy.model.VectorPlayer
+import dev.vector.proxy.network.ConnectionLimiter
 import dev.vector.proxy.network.MinecraftConnection
 import dev.vector.proxy.network.MinecraftFrameEncoder
 import dev.vector.proxy.network.PlayerState
@@ -68,6 +69,7 @@ class VectorServer(val config: VectorConfig, val console: ProxyConsole? = null) 
     override val servers: Collection<dev.vector.api.BackendServer> get() = serverMap.values
     private val disabledServers = ConcurrentHashMap.newKeySet<String>()
     private val backendCooldowns = ConcurrentHashMap<String, Long>()
+    private val connectionLimiterState = ConnectionLimiter.State()
     
     private data class CommandEntry(
         val pluginId: String,
@@ -112,7 +114,26 @@ class VectorServer(val config: VectorConfig, val console: ProxyConsole? = null) 
         }
 
         logger.info("Forwarding mode: {}", config.forwarding.mode.name.lowercase())
+
+        // Modern and BungeeGuard forwarding both derive their HMAC/token from forwarding.secret.
+        // An empty secret means a predictable key, letting anyone who can reach a backend directly
+        // forge a player's identity. Refuse to start rather than run insecurely (matches Velocity).
+        val fwdMode = config.forwarding.mode
+        if ((fwdMode == VectorConfig.ForwardingMode.MODERN || fwdMode == VectorConfig.ForwardingMode.BUNGEEGUARD)
+            && config.forwarding.secret.isBlank()
+        ) {
+            throw IllegalStateException(
+                "Forwarding mode '${fwdMode.name.lowercase()}' requires a non-empty 'forwarding.secret'. " +
+                "Set a strong random secret shared with your backend servers."
+            )
+        }
+
         logger.info("Compression threshold: {} bytes", config.compression.threshold)
+        config.connectionLimits.let { cl ->
+            logger.info("Connection limits: per-IP={}, total={}",
+                if (cl.maxPerIp > 0) cl.maxPerIp.toString() else "unlimited",
+                if (cl.maxTotal > 0) cl.maxTotal.toString() else "unlimited")
+        }
         logger.info("Storage: SQLite @ {}", config.storage.file)
     }
 
@@ -642,6 +663,11 @@ class VectorServer(val config: VectorConfig, val console: ProxyConsole? = null) 
                     override fun initChannel(ch: SocketChannel) {
                         val conn = MinecraftConnection(ch, this@VectorServer)
                         ch.pipeline()
+                            .addLast("connection-limiter", ConnectionLimiter(
+                                connectionLimiterState,
+                                config.connectionLimits.maxPerIp,
+                                config.connectionLimits.maxTotal,
+                            ))
                             .addLast("read-timeout", ReadTimeoutHandler(LOGIN_TIMEOUT_SECONDS, TimeUnit.SECONDS))
                             .addLast("frame-decoder", MinecraftVarintFrameDecoder())
                             .addLast("packet-decoder", MinecraftPacketDecoder())
