@@ -18,6 +18,10 @@ class LoginSessionHandler(
     private var loginUsername = ""
     private var verifyToken = ByteArray(0)
 
+    companion object {
+        private val SECURE_RANDOM = SecureRandom()
+    }
+
     override fun connected() {
         logger.info("Connection from {}", connection.remoteAddress)
     }
@@ -40,7 +44,7 @@ class LoginSessionHandler(
         logger.info("Login attempt: {} ({})", loginUsername, connection.remoteAddress)
 
         val keyPair = server.keyPair
-        verifyToken = ByteArray(4).also { SecureRandom().nextBytes(it) }
+        verifyToken = ByteArray(4).also { SECURE_RANDOM.nextBytes(it) }
         connection.write(EncryptionRequestPacket(
             serverId = "",
             publicKey = keyPair.public.encoded,

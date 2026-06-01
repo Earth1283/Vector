@@ -12,7 +12,7 @@ import javax.crypto.spec.SecretKeySpec
 object CryptoUtils {
     fun generateKeyPair(): KeyPair {
         val gen = KeyPairGenerator.getInstance("RSA")
-        gen.initialize(1024)
+        gen.initialize(2048)
         return gen.generateKeyPair()
     }
 

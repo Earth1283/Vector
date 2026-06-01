@@ -115,9 +115,9 @@ class BackendLoginSessionHandler(
     override fun handle(packet: LoginDisconnectPacket): Boolean {
         logger.warn("Backend rejected login for {}: {}", player.username, packet.reason)
         player.server.playerDisconnected(player.uuid)
-        player.connection.closeWith(
-            LoginDisconnectPacket("""{"text":"Backend disconnected: ${packet.reason}","color":"red"}""")
-        )
+        // packet.reason is raw JSON from the backend — forward it directly rather than
+        // string-interpolating it, which would allow a malicious backend to inject JSON.
+        player.connection.closeWith(LoginDisconnectPacket(packet.reason))
         backendConn.close()
         return true
     }

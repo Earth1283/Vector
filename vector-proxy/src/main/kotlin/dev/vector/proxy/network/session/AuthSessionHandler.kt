@@ -30,6 +30,11 @@ class AuthSessionHandler(
         scope.launch {
             val profile = MojangAuth.verify(username, serverHash)
             connection.channel.eventLoop().execute {
+                // Guard: client may have disconnected while the Mojang HTTP call was in-flight.
+                // Without this check, playerConnected() would add a ghost player that is never
+                // removed because channelInactive already fired on the previous handler.
+                if (connection.isClosed) return@execute
+
                 if (profile == null) {
                     connection.closeWith(
                         LoginDisconnectPacket("""{"text":"Authentication failed. Are you logged in?","color":"red"}""")
