@@ -163,10 +163,13 @@ Send a message to all online players.
 
    > broadcast <message>
 
+The message is sent as a system chat packet to all players currently connected
+to a backend server.
+
 .. note::
 
-   In-game chat packet support is planned for Part 7.3. Until then, the message
-   is logged to the console but does not reach players in-game.
+   In-game chat packet support is fully functional for players in the play
+   state. Messages do not reach players currently in limbo or the login process.
 
 version
 -------

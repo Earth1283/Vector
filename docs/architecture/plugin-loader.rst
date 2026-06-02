@@ -124,6 +124,13 @@ Plugin Manifest Reference
    hard-deps   = ["database-plugin"]  # must be present and loaded first
    soft-deps   = ["stats-plugin"]     # load before this plugin if present
 
+The ``language`` field determines the loading mechanism:
+
+- ``KOTLIN`` (default): Loads as a native Vector plugin. The entrypoint must
+  extend ``VectorPlugin``.
+- ``JAVA``: Loads through the Velocity compatibility layer. The entrypoint
+  is treated as a Velocity plugin and undergoes Guice/reflection injection.
+
 The manifest is read from ``vector-plugin.toml`` at the root of the JAR
 (i.e. ``src/main/resources/vector-plugin.toml`` in a standard Gradle layout).
 

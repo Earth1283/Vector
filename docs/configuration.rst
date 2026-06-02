@@ -67,6 +67,20 @@ page to configure the proxy; it exists for quick reference.
    # threshold = 512   # less aggressive; good for high-CPU environments
    # threshold = -1    # disable compression entirely (e.g. LAN-only deployments)
 
+   # Concurrent connection caps to blunt connection-flood / socket-exhaustion DoS.
+   # These limit sockets held at once (the login read-timeout still bounds how long an
+   # idle pre-login socket survives). A limit of 0 disables that particular check.
+   #
+   # max-per-ip - max simultaneous connections from one source IP. Keep generous if
+   #              players share an IP (NAT, VPN, campus networks).
+   # max-total  - max simultaneous connections proxy-wide. 0 = unlimited; set this to
+   #              match the file-descriptor / memory headroom of your host.
+   [connection-limits]
+   max-per-ip = 16
+   max-total  = 0
+   # max-per-ip = 4      # strict: typical home users need only 1-2
+   # max-total  = 2000   # cap total sockets on a small VPS
+
    # Shared SQLite database used by the proxy and plugins for persistent storage.
    # The file is created automatically on first start. The directory must exist.
    [storage]
@@ -159,12 +173,28 @@ page to configure the proxy; it exists for quick reference.
    #   unclaimed-message  - shown to held players when max-hold-duration expires,
    #                        or immediately when action = "kick".
    #   max-hold-duration  - seconds before a held player is kicked. 0 = unlimited.
+   #
+   # .. note::
+   #
+   #    While in limbo, the player is kept on the "Logging in..." screen. No in-game
+   #    "Limbo" world is sent; the connection is simply kept alive and retried.
    [limbo]
    unclaimed-action    = "kick"
    unclaimed-message   = "No server available."
    max-hold-duration   = 120
    # unclaimed-action  = "hold"
    # max-hold-duration = 0   # hold indefinitely until a server comes up
+
+Backend Cooldowns
+-----------------
+
+Vector maintains an internal 30-second cooldown for backend servers that fail
+to accept a connection. If the proxy fails to connect to a server (e.g. during
+an initial join or a fallback attempt), that server is marked as unavailable
+for 30 seconds and will be skipped in the ``routing.try`` list.
+
+This mechanism ensures that a single offline server doesn't stall connections
+for every player by forcing a TCP timeout on every join attempt.
 
 Forwarding Modes
 ~~~~~~~~~~~~~~~~
@@ -292,8 +322,8 @@ Any top-level config key can be overridden per server using dot-notation:
 .. code-block:: toml
 
    [servers.lobby.overrides]
-   "transfer.cooldown.enabled"          = false
-   "player-experience.chat.filter-spam" = false
+   "motd.description"                   = "Welcome to the Lobby!"
+   "player-experience.hide-player-count" = true
 
 Config Loading Flow
 -------------------
