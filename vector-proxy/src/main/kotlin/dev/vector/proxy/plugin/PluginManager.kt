@@ -88,7 +88,9 @@ class PluginManager(private val server: VectorServer) {
         }
 
         for (container in _plugins) {
-            enablePlugin(container)
+            if (container.instance is VectorPlugin || container.instance is VectorJavaPlugin) {
+                enablePlugin(container)
+            }
         }
     }
 
