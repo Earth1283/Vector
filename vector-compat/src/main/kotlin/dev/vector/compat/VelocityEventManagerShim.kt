@@ -63,8 +63,11 @@ class VelocityEventManagerShim(private val vectorServer: ProxyServer) : EventMan
             .forEach { method ->
                 val eventType = method.parameterTypes[0]
                 val order = method.getAnnotation(Subscribe::class.java).order
-                subscribers.getOrPut(eventType) { CopyOnWriteArrayList() }
-                    .add(SubscriberEntry(plugin, listener, method, order))
+                val list = subscribers.getOrPut(eventType) { CopyOnWriteArrayList() }
+                list.add(SubscriberEntry(plugin, listener, method, order))
+                // Re-sort in place so fire() never needs to sort.
+                val sorted = list.sortedBy { it.order.ordinal }
+                subscribers[eventType] = CopyOnWriteArrayList(sorted)
                 logger.debug("Registered @Subscribe handler {}.{} for {}",
                     listener.javaClass.simpleName, method.name, eventType.simpleName)
             }
@@ -76,8 +79,12 @@ class VelocityEventManagerShim(private val vectorServer: ProxyServer) : EventMan
 
     override fun <E : Any> register(plugin: Any, clazz: Class<E>, priority: Short, handler: EventHandler<E>) {
         @Suppress("UNCHECKED_CAST")
-        (functional.getOrPut(clazz) { CopyOnWriteArrayList() } as CopyOnWriteArrayList<FunctionalEntry<E>>)
-            .add(FunctionalEntry(plugin, handler, priority))
+        val list = (functional.getOrPut(clazz) { CopyOnWriteArrayList() } as CopyOnWriteArrayList<FunctionalEntry<E>>)
+        list.add(FunctionalEntry(plugin, handler, priority))
+        // Re-sort descending so fire() never needs to sort.
+        val sorted = list.sortedByDescending { it.priority }
+        @Suppress("UNCHECKED_CAST")
+        functional[clazz] = CopyOnWriteArrayList(sorted) as CopyOnWriteArrayList<FunctionalEntry<*>>
     }
 
     override fun <E : Any> fire(event: E): CompletableFuture<E> {
@@ -85,7 +92,8 @@ class VelocityEventManagerShim(private val vectorServer: ProxyServer) : EventMan
 
         val subs = subscribers[eventClass]
         if (subs != null) {
-            subs.sortedBy { it.order.ordinal }.forEach { entry ->
+            // Already sorted by order at registration time.
+            subs.forEach { entry ->
                 try {
                     entry.method.isAccessible = true
                     entry.method.invoke(entry.listener, event)
@@ -99,7 +107,8 @@ class VelocityEventManagerShim(private val vectorServer: ProxyServer) : EventMan
 
         @Suppress("UNCHECKED_CAST")
         val fns = functional[eventClass] as? CopyOnWriteArrayList<FunctionalEntry<E>>
-        fns?.sortedByDescending { it.priority }?.forEach { fn ->
+        // Already sorted descending by priority at registration time.
+        fns?.forEach { fn ->
             try {
                 fn.handler.execute(event)
             } catch (e: Exception) {

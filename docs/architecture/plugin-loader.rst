@@ -12,7 +12,7 @@ Loading Pipeline
    flowchart TD
        Start([VectorServer.start\nafter Netty bind])
        Scan["Scan plugins/ dir\nfor *.jar files"]
-       Manifest["Open each JAR\nread vector-plugin.toml\n→ RawManifest → PluginManifest"]
+       Manifest["Open each JAR once\ndetect manifest type + read contents\n→ PluginNode (manifest + path)"]
        Wave["computeWaves(nodes)\nRespects hard-deps order"]
 
        subgraph Wave1["Wave 1 — no dependencies"]

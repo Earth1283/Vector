@@ -22,7 +22,9 @@ import dev.vector.proxy.network.NettyTransport
 import dev.vector.proxy.plugin.PluginManager
 import io.netty.bootstrap.ServerBootstrap
 import io.netty.channel.ChannelInitializer
+import io.netty.channel.ChannelOption
 import io.netty.channel.socket.SocketChannel
+import io.netty.handler.flush.FlushConsolidationHandler
 import io.netty.handler.timeout.ReadTimeoutHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +65,7 @@ class VectorServer(val config: VectorConfig, val console: ProxyConsole? = null) 
     val keyPair: KeyPair
 
     private val _players = ConcurrentHashMap<UUID, VectorPlayer>()
+    private val _playersByName = ConcurrentHashMap<String, VectorPlayer>()
     override val players: Collection<dev.vector.api.VectorPlayer> get() = _players.values
 
     val serverMap = ConcurrentHashMap<String, BackendServerInfo>()
@@ -139,16 +142,18 @@ class VectorServer(val config: VectorConfig, val console: ProxyConsole? = null) 
 
     override fun getPlayer(uuid: UUID): dev.vector.api.VectorPlayer? = _players[uuid]
     override fun getPlayer(username: String): dev.vector.api.VectorPlayer? =
-        _players.values.find { it.username == username }
+        _playersByName[username.lowercase()]
 
     fun playerConnected(player: VectorPlayer) {
         _players[player.uuid] = player
+        _playersByName[player.username.lowercase()] = player
         logger.info("{} ({}) connected [{} online]", player.username, player.uuid, _players.size)
     }
 
     fun playerDisconnected(uuid: UUID) {
         _players.remove(uuid)?.let { player ->
-            logger.info("{} ({}) disconnected [{} online]", player.username, uuid, _players.size - 1)
+            _playersByName.remove(player.username.lowercase())
+            logger.info("{} ({}) disconnected [{} online]", player.username, uuid, _players.size)
         }
     }
 
@@ -606,7 +611,7 @@ class VectorServer(val config: VectorConfig, val console: ProxyConsole? = null) 
         logger.info("  serverctl status <server>            — probe and detail a single backend")
         logger.info("  serverctl enable|disable <server>    — add/remove backend from routing pool")
         logger.info("  plugins                              — list loaded plugins")
-        logger.info("  broadcast <message>                  — broadcast a message (stub)")
+        logger.info("  broadcast <message>                  — broadcast a message to all in-game players")
         logger.info("  version                              — show version and runtime info")
         logger.info("  uptime                               — show how long the proxy has been running")
         logger.info("  stop                                 — shut down the proxy gracefully")
@@ -659,10 +664,14 @@ class VectorServer(val config: VectorConfig, val console: ProxyConsole? = null) 
             val bound = ServerBootstrap()
                 .group(boss, worker)
                 .channel(NettyTransport.serverChannelClass)
+                .childOption(ChannelOption.TCP_NODELAY, true)
+                .childOption(ChannelOption.SO_SNDBUF, 1 * 1024 * 1024)
+                .childOption(ChannelOption.SO_RCVBUF, 1 * 1024 * 1024)
                 .childHandler(object : ChannelInitializer<SocketChannel>() {
                     override fun initChannel(ch: SocketChannel) {
                         val conn = MinecraftConnection(ch, this@VectorServer)
                         ch.pipeline()
+                            .addLast("flush-consolidation", FlushConsolidationHandler(256, true))
                             .addLast("connection-limiter", ConnectionLimiter(
                                 connectionLimiterState,
                                 config.connectionLimits.maxPerIp,

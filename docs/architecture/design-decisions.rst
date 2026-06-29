@@ -182,6 +182,75 @@ bytes. Any play packet the proxy does inspect (future: tab list, keep-alive)
 must be re-parsed from this raw form. Acceptable — proxies rarely need to
 inspect most play packets.
 
+Forwarding Path Uses ``write`` + ``FlushConsolidationHandler``, Not ``writeAndFlush``
+--------------------------------------------------------------------------------------
+
+**Decision:** In ``ClientPlaySessionHandler`` and ``BackendPlaySessionHandler``,
+forwarded ``ByteBuf``s are enqueued with ``channel.write()`` rather than
+``channel.writeAndFlush()``. A ``FlushConsolidationHandler(256, true)`` sits at
+the head of every pipeline (both client-facing and backend-facing) and handles
+batching.
+
+**Reasoning:** A Minecraft server typically sends 20–100+ packets per game tick.
+``writeAndFlush()`` calls ``flush()`` immediately after each write, which in
+Netty translates to an ``epoll_wait`` / ``kevent`` syscall per packet. Under
+load (many players, large worlds) this becomes the dominant CPU cost.
+
+``FlushConsolidationHandler`` defers the actual ``flush()`` until
+``channelReadComplete`` fires — i.e. once per read batch rather than once per
+packet. Combined with ``TCP_NODELAY``, this means:
+
+* Packets from a single game tick are coalesced into one or two TCP segments.
+* The event-loop thread spends its cycles on Kotlin/JVM logic, not syscall overhead.
+* Latency is still sub-millisecond because ``channelReadComplete`` fires at the
+  end of the same event-loop iteration that received the data.
+
+``consolidateWhenNoReadInProgress=true`` is required so that writes to the
+*destination* channel (which is not currently in a read cycle) are still
+batched via a next-tick scheduled flush, rather than flushed synchronously.
+
+.. mermaid::
+
+   sequenceDiagram
+       participant BE as Backend channel
+       participant FCH as FlushConsolidationHandler\n(client channel)
+       participant Client as Client channel
+
+       Note over BE: Game tick: 40 packets arrive
+       loop for each of 40 packets
+           BE->>Client: channel.write(buf)
+           FCH->>FCH: pendingFlush++
+       end
+       Note over BE: channelReadComplete fires
+       FCH->>Client: channel.flush() — one syscall
+       Note over Client: 40 packets → ~2 TCP segments
+
+**Trade-offs accepted:** Control packets (login, compression setup, disconnect)
+still use ``writeAndFlush()`` via ``MinecraftConnection.write()``. For those
+low-frequency messages the ``FlushConsolidationHandler`` will still coalesce
+concurrent writes, and the additional latency of a direct flush is imperceptible
+and sometimes desirable (e.g. you want the disconnect message delivered
+immediately). Adding per-handler flush logic for control paths would add
+complexity with no measurable benefit.
+
+Player Lookups Use a Dual-Index Map
+------------------------------------
+
+**Decision:** ``VectorServer`` maintains two concurrent maps for connected
+players: ``_players: ConcurrentHashMap<UUID, VectorPlayer>`` (primary) and
+``_playersByName: ConcurrentHashMap<String, VectorPlayer>`` (secondary, keyed
+by lowercased username).
+
+**Reasoning:** ``getPlayer(username)`` is called by plugins, command handlers,
+and the ``kick`` command. With a single UUID-keyed map, every username lookup
+scans all connected players — O(n). At 500 players that is 500 comparisons per
+call. The secondary map makes it O(1) at the cost of two map writes on connect
+and disconnect.
+
+**Trade-offs accepted:** Username changes (which Minecraft does not support mid-
+session) would leave a stale entry. Since the map is keyed by the username
+captured at login and cleared on disconnect, this is not a concern in practice.
+
 Three Laws (Non-negotiable)
 ---------------------------
 

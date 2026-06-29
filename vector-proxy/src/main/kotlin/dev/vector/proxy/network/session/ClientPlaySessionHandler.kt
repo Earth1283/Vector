@@ -21,7 +21,7 @@ class ClientPlaySessionHandler(private val player: VectorPlayer) : SessionHandle
         val backend = player.currentBackendConn ?: return
         if (backend.channel.isActive) {
             buf.retain()
-            backend.channel.writeAndFlush(buf)
+            backend.channel.write(buf, backend.channel.voidPromise())
         }
     }
 

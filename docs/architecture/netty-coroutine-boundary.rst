@@ -14,6 +14,7 @@ The Two Worlds
    flowchart TD
        subgraph Netty["Netty event-loop threads (never block)"]
            TCP[TCP read/write]
+           Flush["Flush consolidation\nFlushConsolidationHandler"]
            Frame["VarInt frame decoding\nMinecraftVarintFrameDecoder"]
            Cipher["AES cipher\nMinecraftCipherDecoder/Encoder"]
            Compress["zlib compress/decompress\nMinecraftCompressDecoder/Encoder"]
@@ -149,6 +150,53 @@ proceed. This is handled by ``AuthSessionHandler``, which:
        NE->>NE: setAutoReading(true)
        NE->>NE: proceed with login
 
+Flush Consolidation
+-------------------
+
+During the play (forwarding) phase, the proxy pipelines packets from one channel
+directly to the other. A naïve implementation calls ``writeAndFlush()`` for each
+packet, which triggers one TCP send syscall per packet — extremely wasteful when
+a server sends dozens of packets per game tick.
+
+Vector avoids this with two cooperating mechanisms:
+
+1. **``FlushConsolidationHandler``** sits at the head of both the client and
+   backend Netty pipelines (inserted before all other handlers). It intercepts
+   ``flush()`` signals and batches them: instead of flushing on every write, it
+   defers the actual flush to the end of the current read batch
+   (``channelReadComplete``). If no read is in progress, it schedules the flush
+   for the next event-loop tick via ``consolidateWhenNoReadInProgress=true``.
+
+2. **``write`` instead of ``writeAndFlush``** in the forwarding handlers
+   (``ClientPlaySessionHandler``, ``BackendPlaySessionHandler``). The handler enqueues
+   the ``ByteBuf`` with ``channel.write(buf, voidPromise())`` and lets
+   ``FlushConsolidationHandler`` decide when to flush.
+
+The result: all packets arriving during a single game tick's read loop are
+written to the peer channel and then flushed in one batch — typically one or
+two TCP segments — regardless of how many individual packets the tick contained.
+
+.. code-block:: kotlin
+
+   // Forwarding handler — write, do NOT flush here
+   override fun handleUnknown(buf: ByteBuf) {
+       val backend = player.currentBackendConn ?: return
+       if (backend.channel.isActive) {
+           buf.retain()
+           backend.channel.write(buf, backend.channel.voidPromise())
+           // FlushConsolidationHandler will flush after channelReadComplete
+       }
+   }
+
+.. note::
+
+   Structured packets sent outside the forwarding loop — login packets,
+   compression negotiation, disconnect messages — still use
+   ``MinecraftConnection.write()`` which calls ``writeAndFlush()``. For those
+   low-frequency control messages the per-call flush overhead is negligible
+   and the ``FlushConsolidationHandler`` will still coalesce them if they
+   happen to be sent within the same read cycle.
+
 Rules Summary
 -------------
 
@@ -160,14 +208,16 @@ Rules Summary
      - Unsafe
    * - ``proxyScope.launch { }`` from a session handler
      - ``Thread.sleep()`` on a Netty thread
-   * - ``channel.writeAndFlush()`` from any thread
+   * - ``channel.write()`` + ``FlushConsolidationHandler`` in forwarding path
      - Calling ``pipeline().addLast()`` from a coroutine
-   * - ``channel.eventLoop().execute { }`` from a coroutine
+   * - ``channel.writeAndFlush()`` for control/login packets
      - Reading a ``ByteBuf`` after its reference count drops to zero
-   * - ``delay()`` inside a coroutine
+   * - ``channel.eventLoop().execute { }`` from a coroutine
      - Blocking network call inside a session handler callback
-   * - ``withContext(Dispatchers.IO) { }`` for blocking work
+   * - ``delay()`` inside a coroutine
      - Sharing a non-thread-safe ``ByteBuf`` across threads
+   * - ``withContext(Dispatchers.IO) { }`` for blocking work
+     - Calling ``channel.write()`` without ``FlushConsolidationHandler`` in the pipeline
 
 Configuration
 -------------

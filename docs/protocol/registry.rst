@@ -84,9 +84,18 @@ instances, keyed by protocol version integer, provide the floor-entry walk:
        // protocol_int → { packet_class → packet_id }
        private val byClass = TreeMap<Int, MutableMap<KClass<*>, Int>>()
 
-       // Lookup caches — invalidated on every register() call
-       private val factoryCache = ConcurrentHashMap<Long, (() -> MinecraftPacket)?>()
-       private val idCache      = ConcurrentHashMap<Pair<KClass<*>, ProtocolVersion>, Int?>()
+       // Factory cache — Long key: (packetId << 32) | version.ordinal.
+       // Uses an ABSENT sentinel lambda instead of nullable to avoid a double
+       // containsKey + get lookup on cache-miss for unknown packets.
+       private val ABSENT: () -> MinecraftPacket = { error("absent sentinel") }
+       private val factoryCache = ConcurrentHashMap<Long, () -> MinecraftPacket>()
+
+       // ID cache — per-class IntArray indexed by ProtocolVersion.ordinal.
+       // Sentinel values: Int.MIN_VALUE = not yet computed, -1 = not found.
+       // Eliminates Pair object allocation on every hot lookup. Concurrent writes
+       // are safe because the computation is deterministic (same class + version
+       // always yields the same ID).
+       private val idCacheArr = ConcurrentHashMap<KClass<*>, IntArray>()
 
        fun register(
            clazz: KClass<out MinecraftPacket>,
@@ -97,35 +106,48 @@ instances, keyed by protocol version integer, provide the floor-entry walk:
            byId.getOrPut(sinceVersion.protocol) { mutableMapOf() }[id] = factory
            byClass.getOrPut(sinceVersion.protocol) { mutableMapOf() }[clazz] = id
            factoryCache.clear()   // invalidate both caches on schema change
-           idCache.clear()
+           idCacheArr.clear()
        }
 
        fun getFactory(packetId: Int, version: ProtocolVersion): (() -> MinecraftPacket)? {
-           val cacheKey = (packetId.toLong() shl 32) or version.ordinal.toLong()
-           factoryCache[cacheKey]?.let { return it }
+           val key = (packetId.toLong() shl 32) or version.ordinal.toLong()
+           factoryCache[key]?.let { return if (it === ABSENT) null else it }
            var result: (() -> MinecraftPacket)? = null
            byId.headMap(version.protocol, true).values.forEach { map ->
                map[packetId]?.also { result = it }
            }
-           factoryCache[cacheKey] = result
+           factoryCache[key] = result ?: ABSENT
            return result
        }
 
        fun getPacketId(clazz: KClass<*>, version: ProtocolVersion): Int? {
-           val cacheKey = Pair(clazz, version)
-           idCache[cacheKey]?.let { return it }
-           var result: Int? = null
+           val arr = idCacheArr.computeIfAbsent(clazz) {
+               IntArray(ProtocolVersion.entries.size) { Int.MIN_VALUE }
+           }
+           val idx = version.ordinal
+           val v = arr[idx]
+           if (v != Int.MIN_VALUE) return if (v == -1) null else v
+           var result = -1
            byClass.headMap(version.protocol, true).values.forEach { map ->
                map[clazz]?.also { result = it }
            }
-           idCache[cacheKey] = result
-           return result
+           arr[idx] = result
+           return if (result == -1) null else result
        }
    }
 
-The cache keys are compact: ``factoryCache`` encodes both ``packetId`` and
-``version.ordinal`` into a single ``Long`` to avoid object allocation on the hot
-lookup path.
+**Cache key design:**
+
+- ``factoryCache`` encodes ``packetId`` and ``version.ordinal`` into a single
+  ``Long`` — zero object allocation per lookup after warmup.
+- ``idCacheArr`` stores one ``IntArray`` per packet class, indexed by
+  ``ProtocolVersion.ordinal``. Compared to the previous ``Pair<KClass<*>, ProtocolVersion>``
+  key, this eliminates a heap allocation on every lookup during the cache-warm
+  phase and reduces cache memory from one ``Pair`` object per (class, version)
+  tuple to one ``IntArray`` per class.
+- Both caches use sentinel values instead of nullable entries so a single map
+  ``get()`` distinguishes "cached not-found" from "not yet cached", avoiding
+  a secondary ``containsKey`` call.
 
 ``StateRegistry``
 -----------------

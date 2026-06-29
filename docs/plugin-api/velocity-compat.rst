@@ -48,21 +48,23 @@ How Velocity Plugins are Detected
 
    flowchart TD
        Scan["Scan plugins/ for *.jar"]
+       OpenJAR["Open each JAR once\n(single JarFile pass)"]
        CheckToml{vector-plugin.toml\npresent?}
        CheckVelocity{velocity-plugin.json\npresent?}
        NativeLoad["Load as native\nVector plugin"]
        CompatLoad["Load through\nVelocity compat layer"]
        Warn["Warn: no manifest\nSkip JAR"]
 
-       Scan --> CheckToml
+       Scan --> OpenJAR --> CheckToml
        CheckToml -->|yes| NativeLoad
        CheckToml -->|no| CheckVelocity
        CheckVelocity -->|yes| CompatLoad
        CheckVelocity -->|no| Warn
 
-A JAR with both manifests is treated as a native Vector plugin. This allows
-plugin authors to publish a single JAR that works on both Velocity and Vector
-during a migration period.
+Each JAR is opened **exactly once**: manifest detection and manifest reading
+happen in the same ``JarFile`` pass. A JAR with both manifests is treated as a
+native Vector plugin, allowing authors to publish a single JAR that works on
+both Velocity and Vector during a migration period.
 
 Compat Layer Architecture
 --------------------------
@@ -152,10 +154,12 @@ events in its ``init`` block:
 1. Finds all methods (including non-public ones) with a single parameter annotated with ``@Subscribe``.
 2. Reads ``annotation.order`` (a Kotlin property access — **not** ``order()``).
 3. Stores ``SubscriberEntry(plugin, listener, method, order)`` keyed by event type.
+4. **Re-sorts the handler list in place** so that ``fire()`` can iterate without sorting.
 
-``fire(event)`` dispatches subscribers sorted by ``PostOrder.ordinal`` ascending
-(``FIRST`` fires first), then dispatches functional ``EventHandler`` entries sorted
-by priority descending. 
+``fire(event)`` dispatches subscribers in the pre-sorted order (ascending
+``PostOrder.ordinal`` — ``FIRST`` fires first), then dispatches functional
+``EventHandler`` entries in descending priority order. Both lists are sorted at
+registration time, not at dispatch time, to avoid per-event allocation.
 
 .. important::
 
@@ -174,6 +178,47 @@ by priority descending.
        Store["Store SubscriberEntry\nin ConcurrentHashMap keyed by event class"]
 
        Register --> Scan --> ForEach --> Store
+
+``VelocityPlayerShim``
+~~~~~~~~~~~~~~~~~~~~~~
+
+Wraps a ``dev.vector.api.VectorPlayer`` and exposes it as a Velocity ``Player``.
+The following fields reflect live proxy state rather than stub values:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Velocity method
+     - Implementation
+   * - ``getRemoteAddress()``
+     - Real client ``InetSocketAddress`` from the Netty channel
+   * - ``getProtocolVersion()``
+     - Velocity ``ProtocolVersion`` mapped from the player's actual protocol integer
+   * - ``isActive()``
+     - ``!connection.isClosed`` — reflects live channel state
+
+The following fields have no equivalent in the current Vector model and return
+safe defaults:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Velocity method
+     - Returns
+   * - ``getPing()``
+     - ``-1`` (no ping tracking)
+   * - ``getEffectiveLocale()``
+     - ``Locale.getDefault()`` (no client locale negotiation)
+   * - ``getClientBrand()``
+     - ``null`` (brand packet not parsed)
+   * - ``sendPluginMessage()``
+     - ``false`` (plugin-channel messaging not implemented)
+   * - ``sendResourcePack()`` / ``sendResourcePackOffer()``
+     - no-op
+   * - ``transferToHost()`` / ``storeCookie()`` / ``requestCookie()``
+     - no-op (1.20.5+ transfer/cookie API)
 
 ``VelocityPluginLoader``
 ~~~~~~~~~~~~~~~~~~~~~~~~

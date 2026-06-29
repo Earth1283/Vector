@@ -7,6 +7,7 @@ import dev.vector.proxy.protocol.ProtocolVersion
 import dev.vector.proxy.protocol.packet.play.PlayDisconnectPacket
 import dev.vector.proxy.network.BackendConnection
 import kotlinx.coroutines.CompletableDeferred
+import java.net.SocketAddress
 import java.util.UUID
 
 class VectorPlayer(
@@ -17,7 +18,9 @@ class VectorPlayer(
 
     override val uuid: UUID get() = profile.uuid
     override val username: String get() = profile.username
-    val protocolVersion: ProtocolVersion get() = connection.protocolVersion
+    override val remoteAddress: SocketAddress get() = connection.remoteAddress
+    override val protocolVersion: Int get() = connection.protocolVersion.protocol
+    override val isConnected: Boolean get() = !connection.isClosed
     val playerState: PlayerState get() = connection.playerState
 
     var currentServerInfo: BackendServerInfo? = null

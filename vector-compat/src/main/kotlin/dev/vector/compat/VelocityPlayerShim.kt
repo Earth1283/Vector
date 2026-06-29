@@ -41,10 +41,12 @@ class VelocityPlayerShim(
     override fun identity(): Identity = _identity
 
     // - InboundConnection
-    override fun getRemoteAddress(): InetSocketAddress = InetSocketAddress(0)
+    override fun getRemoteAddress(): InetSocketAddress =
+        vectorPlayer.remoteAddress as? InetSocketAddress ?: InetSocketAddress(0)
     override fun getVirtualHost(): Optional<InetSocketAddress> = Optional.empty()
-    override fun isActive(): Boolean = true
-    override fun getProtocolVersion(): ProtocolVersion = ProtocolVersion.UNKNOWN
+    override fun isActive(): Boolean = vectorPlayer.isConnected
+    override fun getProtocolVersion(): ProtocolVersion =
+        ProtocolVersion.getProtocolVersion(vectorPlayer.protocolVersion)
     override fun getProtocolState(): ProtocolState = ProtocolState.PLAY
 
     // - PermissionSubject

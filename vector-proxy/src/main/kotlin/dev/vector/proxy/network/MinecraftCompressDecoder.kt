@@ -10,6 +10,8 @@ import java.util.zip.Inflater
 class MinecraftCompressDecoder(val threshold: Int) : MessageToMessageDecoder<ByteBuf>() {
 
     private val inflater = Inflater()
+    // Reused per-handler output buffer; grows as needed but never shrinks below 4 KB.
+    private var decompressBuffer = ByteArray(4096)
 
     override fun decode(ctx: ChannelHandlerContext, msg: ByteBuf, out: MutableList<Any>) {
         val dataLength = msg.readVarInt()
@@ -23,22 +25,22 @@ class MinecraftCompressDecoder(val threshold: Int) : MessageToMessageDecoder<Byt
         if (dataLength > MAX_DECOMPRESSED_SIZE) {
             throw DecoderException("Badly compressed packet: dataLength=$dataLength exceeds limit=$MAX_DECOMPRESSED_SIZE")
         }
-        val compressed = ByteArray(msg.readableBytes())
-        msg.readBytes(compressed)
 
-        inflater.setInput(compressed)
-        val decompressed = ByteArray(dataLength)
-        val actualLength = inflater.inflate(decompressed)
+        // Feed compressed bytes via ByteBuffer view — avoids a heap-array copy for direct buffers.
+        inflater.setInput(msg.nioBuffer())
+
+        // Reuse the decompression scratch buffer, growing it only when needed.
+        if (decompressBuffer.size < dataLength) {
+            decompressBuffer = ByteArray(dataLength)
+        }
+        val actualLength = inflater.inflate(decompressBuffer, 0, dataLength)
         inflater.reset()
 
-        // The protocol guarantees dataLength is the exact uncompressed size. Reject a stream
-        // that inflates to fewer bytes (corrupt or lying header); over-sized streams cannot
-        // exceed the dataLength buffer and are already capped by MAX_DECOMPRESSED_SIZE.
         if (actualLength != dataLength) {
             throw DecoderException("Badly compressed packet: claimed dataLength=$dataLength but inflated $actualLength bytes")
         }
 
-        out.add(ctx.alloc().buffer(actualLength).writeBytes(decompressed, 0, actualLength))
+        out.add(ctx.alloc().buffer(actualLength).writeBytes(decompressBuffer, 0, actualLength))
     }
 
     override fun handlerRemoved(ctx: ChannelHandlerContext) {

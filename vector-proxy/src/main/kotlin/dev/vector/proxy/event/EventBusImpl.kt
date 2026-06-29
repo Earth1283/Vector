@@ -10,6 +10,8 @@ import kotlin.reflect.KClass
 
 class EventBusImpl : EventBus {
 
+    private val logger = org.slf4j.LoggerFactory.getLogger(EventBusImpl::class.java)
+
     private data class HandlerEntry(
         val pluginId: String,
         val priority: EventPriority,
@@ -44,7 +46,6 @@ class EventBusImpl : EventBus {
 
     override suspend fun <T : VectorEvent> fire(event: T): T {
         val list = handlers[event::class] ?: return event
-        val logger = org.slf4j.LoggerFactory.getLogger(EventBusImpl::class.java)
         for (entry in list) {
             if (event is CancellableEvent && event.isCancelled && entry.priority != EventPriority.MONITOR) continue
             try {

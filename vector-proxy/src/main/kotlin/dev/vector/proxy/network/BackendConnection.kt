@@ -9,7 +9,9 @@ import dev.vector.proxy.network.NettyTransport
 import io.netty.bootstrap.Bootstrap
 import io.netty.channel.ChannelFutureListener
 import io.netty.channel.ChannelInitializer
+import io.netty.channel.ChannelOption
 import io.netty.channel.socket.SocketChannel
+import io.netty.handler.flush.FlushConsolidationHandler
 import org.slf4j.LoggerFactory
 
 class BackendConnection(
@@ -28,11 +30,15 @@ class BackendConnection(
         Bootstrap()
             .group(clientConn.channel.eventLoop())
             .channel(NettyTransport.clientChannelClass)
+            .option(ChannelOption.TCP_NODELAY, true)
+            .option(ChannelOption.SO_SNDBUF, 1 * 1024 * 1024)
+            .option(ChannelOption.SO_RCVBUF, 1 * 1024 * 1024)
             .handler(object : ChannelInitializer<SocketChannel>() {
                 override fun initChannel(ch: SocketChannel) {
                     val backendConn = MinecraftConnection(ch)
                     connection = backendConn
                     ch.pipeline()
+                        .addLast("flush-consolidation", FlushConsolidationHandler(256, true))
                         .addLast("frame-decoder", MinecraftVarintFrameDecoder())
                         .addLast("packet-decoder", MinecraftPacketDecoder(Direction.CLIENTBOUND))
                         .addLast("packet-encoder", MinecraftPacketEncoder(Direction.SERVERBOUND))

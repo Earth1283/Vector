@@ -44,16 +44,8 @@ class PluginManager(private val server: VectorServer) {
 
         val nodes = jars.mapNotNull { jar ->
             try {
-                detectPluginType(jar).let { type ->
-                    when (type) {
-                        PluginType.NATIVE -> loadManifest(jar)?.let { PluginNode(it, jar) }
-                        PluginType.LEGACY -> loadLegacyManifest(jar)?.let { PluginNode(it, jar) }
-                        PluginType.UNKNOWN -> {
-                            logger.warn("{} has no plugin manifest, skipping", jar.fileName)
-                            null
-                        }
-                    }
-                }
+                // Detect type and load manifest in a single JarFile open.
+                readPluginNode(jar)
             } catch (e: Exception) {
                 logger.warn("Failed to read manifest from {}: {}", jar.fileName, e.message)
                 null
@@ -99,36 +91,37 @@ class PluginManager(private val server: VectorServer) {
         }
     }
 
-    private fun loadLegacyManifest(jar: Path): dev.vector.api.plugin.PluginManifest? {
-        JarFile(jar.toFile()).use { jf ->
-            val entry = jf.getJarEntry("velocity-plugin.json") ?: return null
-            val json = jf.getInputStream(entry).bufferedReader().readText()
-            val manifest = dev.vector.compat.VelocityManifest.parse(json)
-            return dev.vector.api.plugin.PluginManifest(
-                id = manifest.id,
-                name = manifest.name ?: manifest.id,
-                version = manifest.version ?: "1.0.0",
-                apiVersion = "1.0.0",
-                entrypoint = manifest.main,
-                language = dev.vector.api.plugin.PluginLanguage.JAVA,
-                hardDeps = manifest.dependencies.filter { !it.optional }.map { it.id },
-                softDeps = manifest.dependencies.filter { it.optional }.map { it.id }
-            )
-        }
-    }
-
-    private fun detectPluginType(jar: Path): PluginType {
-        return try {
-            JarFile(jar.toFile()).use { jf ->
-                when {
-                    jf.getJarEntry("vector-plugin.toml") != null  -> PluginType.NATIVE
-                    jf.getJarEntry("velocity-plugin.json") != null -> PluginType.LEGACY
-                    else -> PluginType.UNKNOWN
+    /** Opens the JAR exactly once, detects the manifest type, and returns a [PluginNode] or null. */
+    private fun readPluginNode(jar: Path): PluginNode? {
+        return JarFile(jar.toFile()).use { jf ->
+            when {
+                jf.getJarEntry("vector-plugin.toml") != null -> {
+                    val entry = jf.getJarEntry("vector-plugin.toml")!!
+                    val toml = jf.getInputStream(entry).bufferedReader().readText()
+                    val manifest = Toml.decodeFromString<RawManifest>(toml).toManifest()
+                    PluginNode(manifest, jar)
+                }
+                jf.getJarEntry("velocity-plugin.json") != null -> {
+                    val entry = jf.getJarEntry("velocity-plugin.json")!!
+                    val json = jf.getInputStream(entry).bufferedReader().readText()
+                    val raw = dev.vector.compat.VelocityManifest.parse(json)
+                    val manifest = dev.vector.api.plugin.PluginManifest(
+                        id = raw.id,
+                        name = raw.name ?: raw.id,
+                        version = raw.version ?: "1.0.0",
+                        apiVersion = "1.0.0",
+                        entrypoint = raw.main,
+                        language = dev.vector.api.plugin.PluginLanguage.JAVA,
+                        hardDeps = raw.dependencies.filter { !it.optional }.map { it.id },
+                        softDeps = raw.dependencies.filter { it.optional }.map { it.id },
+                    )
+                    PluginNode(manifest, jar)
+                }
+                else -> {
+                    logger.warn("{} has no plugin manifest, skipping", jar.fileName)
+                    null
                 }
             }
-        } catch (e: Exception) {
-            logger.warn("Could not inspect {}: {}", jar.fileName, e.message)
-            PluginType.UNKNOWN
         }
     }
 
@@ -138,19 +131,6 @@ class PluginManager(private val server: VectorServer) {
         }
         _plugins.clear()
         velocityProxyShim?.shutdown()
-    }
-
-    private enum class PluginType { NATIVE, LEGACY, UNKNOWN }
-
-    private fun loadManifest(jar: Path): dev.vector.api.plugin.PluginManifest? {
-        JarFile(jar.toFile()).use { jf ->
-            val entry = jf.getJarEntry("vector-plugin.toml") ?: run {
-                logger.warn("{} has no vector-plugin.toml, skipping", jar.fileName)
-                return null
-            }
-            val toml = jf.getInputStream(entry).bufferedReader().readText()
-            return Toml.decodeFromString<RawManifest>(toml).toManifest()
-        }
     }
 
     private fun instantiatePlugin(node: PluginNode, parent: ClassLoader): PluginContainer? {

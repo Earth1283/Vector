@@ -14,27 +14,24 @@ class MinecraftCompressEncoder(val threshold: Int) : MessageToByteEncoder<ByteBu
     override fun encode(ctx: ChannelHandlerContext, msg: ByteBuf, out: ByteBuf) {
         val uncompressedSize = msg.readableBytes()
         if (uncompressedSize < threshold) {
-            out.writeVarInt(uncompressedSize + 1)   // outer length: 1 (data-length varint) + data
-            out.writeByte(0)                          // data-length = 0 (not compressed)
+            out.writeVarInt(uncompressedSize + 1)   // outer length: 1-byte data-length varint + data
+            out.writeByte(0)                          // data-length = 0 means not compressed
             out.writeBytes(msg)
         } else {
-            val raw = ByteArray(uncompressedSize)
-            msg.readBytes(raw)
-            
-            deflater.setInput(raw)
+            // Feed via ByteBuffer view — avoids a heap-array copy for direct buffers.
+            deflater.setInput(msg.nioBuffer())
             deflater.finish()
-            
+
             val maxCompressedSize = uncompressedSize + 100
             if (encodeBuffer.size < maxCompressedSize) {
                 encodeBuffer = ByteArray(maxCompressedSize)
             }
-            
             val n = deflater.deflate(encodeBuffer)
             deflater.reset()
 
             val dataLengthBytes = varIntSize(uncompressedSize)
-            out.writeVarInt(dataLengthBytes + n)    // outer length
-            out.writeVarInt(uncompressedSize)        // data-length = uncompressed size
+            out.writeVarInt(dataLengthBytes + n)     // outer length
+            out.writeVarInt(uncompressedSize)         // data-length = uncompressed size
             out.writeBytes(encodeBuffer, 0, n)
         }
     }

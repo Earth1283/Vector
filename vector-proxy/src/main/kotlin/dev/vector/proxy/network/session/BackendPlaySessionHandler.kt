@@ -15,7 +15,7 @@ class BackendPlaySessionHandler(private val player: VectorPlayer) : SessionHandl
     override fun handleUnknown(buf: ByteBuf) {
         if (player.connection.channel.isActive) {
             buf.retain()
-            player.connection.channel.writeAndFlush(buf)
+            player.connection.channel.write(buf, player.connection.channel.voidPromise())
         }
     }
 
