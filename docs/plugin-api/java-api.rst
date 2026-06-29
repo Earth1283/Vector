@@ -48,7 +48,7 @@ Plugin Manifest
 Setting ``language = "JAVA"`` tells the plugin loader to instantiate the class
 via reflection rather than through the Kotlin ``VectorPlugin`` DSL path.
 
-Plugin Class (Planned API)
+Plugin Class
 ---------------------------
 
 .. code-block:: java

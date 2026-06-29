@@ -134,6 +134,8 @@ The ``language`` field determines the loading mechanism:
 The manifest is read from ``vector-plugin.toml`` at the root of the JAR
 (i.e. ``src/main/resources/vector-plugin.toml`` in a standard Gradle layout).
 
+If your plugin has both mainfests, ``vector-plugin.toml`` will be read and executed.
+
 PluginContainer
 ---------------
 
