@@ -37,6 +37,10 @@ class VelocityCommandManagerTest {
             registeredCommands[name] = pluginId to handler
         }
         
+        override fun unregisterCommand(name: String) {
+            registeredCommands.remove(name)
+        }
+
         override fun unregisterCommands(pluginId: String) {
             registeredCommands.entries.removeIf { it.value.first == pluginId }
         }

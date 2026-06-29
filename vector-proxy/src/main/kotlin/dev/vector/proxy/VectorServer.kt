@@ -238,6 +238,12 @@ class VectorServer(val config: VectorConfig, val console: ProxyConsole? = null) 
         }
     }
 
+    override fun unregisterCommand(name: String) {
+        val lowName = name.lowercase()
+        commandRegistry.remove(lowName)
+        console?.let { c -> c.builtinCommands = c.builtinCommands.filter { it != lowName } }
+    }
+
     override fun unregisterCommands(pluginId: String) {
         val removed = commandRegistry.entries.filter { it.value.pluginId == pluginId }.map { it.key }
         removed.forEach { commandRegistry.remove(it) }

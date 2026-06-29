@@ -85,6 +85,7 @@ class VelocitySchedulerTests(
                         handler: suspend (List<String>) -> Unit,
                         completer: (List<String>) -> List<String>
                     ) {}
+                    override fun unregisterCommand(name: String) {}
                     override fun unregisterCommands(pluginId: String) {}
                     override fun registerServer(name: String, address: java.net.InetSocketAddress) =
                         throw UnsupportedOperationException()

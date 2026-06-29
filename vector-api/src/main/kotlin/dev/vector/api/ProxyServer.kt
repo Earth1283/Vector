@@ -20,6 +20,7 @@ interface ProxyServer {
         handler: suspend (List<String>) -> Unit,
         completer: (List<String>) -> List<String> = { emptyList() }
     )
+    fun unregisterCommand(name: String)
     fun unregisterCommands(pluginId: String)
     fun registerServer(name: String, address: java.net.InetSocketAddress): BackendServer
     fun unregisterServer(name: String)

@@ -17,7 +17,7 @@ val currentCommandSender = ThreadLocal<String?>()
 
 class VelocityCommandManagerShim(private val vectorServer: ProxyServer) : CommandManager {
 
-    private val brigadierDispatchers = mutableMapOf<Command, CommandDispatcher<CommandSource>>()
+    private val brigadierDispatchers = java.util.concurrent.ConcurrentHashMap<Command, CommandDispatcher<CommandSource>>()
 
     override fun metaBuilder(alias: String): CommandMeta.Builder =
         VelocityCommandMetaBuilder(alias)
@@ -57,24 +57,24 @@ class VelocityCommandManagerShim(private val vectorServer: ProxyServer) : Comman
                 } else {
                     VelocityConsoleCommandSource()
                 }
-                when (command) {
-                    is RawCommand -> {
-                        val invocation = VelocityRawInvocation(source, alias, args.joinToString(" "))
-                        command.execute(invocation)
-                    }
-                    is SimpleCommand -> {
-                        val invocation = VelocitySimpleInvocation(source, alias, args.toTypedArray())
-                        command.execute(invocation)
-                    }
-                    is BrigadierCommand -> {
-                        val dispatcher = brigadierDispatchers[command]
-                        val cmdLine = if (args.isEmpty()) alias else "$alias ${args.joinToString(" ")}"
-                        try {
+                try {
+                    when (command) {
+                        is RawCommand -> {
+                            val invocation = VelocityRawInvocation(source, alias, args.joinToString(" "))
+                            command.execute(invocation)
+                        }
+                        is SimpleCommand -> {
+                            val invocation = VelocitySimpleInvocation(source, alias, args.toTypedArray())
+                            command.execute(invocation)
+                        }
+                        is BrigadierCommand -> {
+                            val dispatcher = brigadierDispatchers[command]
+                            val cmdLine = if (args.isEmpty()) alias else "$alias ${args.joinToString(" ")}"
                             dispatcher?.execute(cmdLine, source)
-                        } catch (e: Exception) {
-                            source.sendMessage(net.kyori.adventure.text.Component.text("Error executing command: ${e.message}", net.kyori.adventure.text.format.NamedTextColor.RED))
                         }
                     }
+                } catch (e: Exception) {
+                    source.sendMessage(net.kyori.adventure.text.Component.text("Error executing command: ${e.message}", net.kyori.adventure.text.format.NamedTextColor.RED))
                 }
             }, { args ->
                 val senderName = currentCommandSender.get()
@@ -111,7 +111,7 @@ class VelocityCommandManagerShim(private val vectorServer: ProxyServer) : Comman
     }
 
     override fun unregister(alias: String) {
-        // VectorServer doesn't have a direct unregister for a single alias yet
+        vectorServer.unregisterCommand(alias)
     }
 
     override fun unregister(meta: CommandMeta) {

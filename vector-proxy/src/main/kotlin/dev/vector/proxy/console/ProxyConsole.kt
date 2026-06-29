@@ -73,7 +73,11 @@ class ProxyConsole(val theme: ConsoleTheme, private val simplePrompt: Boolean = 
                 }
                 if (line.isNotBlank()) {
                     frecency.record(line.trim().substringBefore(' '))
-                    onCommand(line.trim())
+                    try {
+                        onCommand(line.trim())
+                    } catch (t: Throwable) {
+                        printAbove("Error: ${t.message ?: t.javaClass.simpleName}")
+                    }
                 }
             }
         }
