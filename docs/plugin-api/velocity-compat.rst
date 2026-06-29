@@ -6,12 +6,9 @@ Velocity plugin JAR into the ``plugins/`` directory — if it contains a
 ``velocity-plugin.json`` manifest (Velocity's native format), Vector loads it
 through the compatibility layer instead of the native plugin loader.
 
-.. note::
-
-   **Status: complete as of Part 7.7.** The full shim layer is implemented in
-   ``vector-compat`` and wired into ``PluginManager``. Velocity plugins with a
-   ``velocity-plugin.json`` manifest are loaded automatically alongside native
-   plugins.
+Velocity plugins with a ``velocity-plugin.json`` manifest are loaded
+automatically alongside native plugins — no configuration required. Drop the
+JAR into ``plugins/`` and Vector handles the rest.
 
 Hard Limits
 -----------

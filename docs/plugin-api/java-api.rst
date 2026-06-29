@@ -7,9 +7,12 @@ Kotlin-specific constructs.
 
 .. note::
 
-   **Status:** The ``VectorJavaPlugin`` base class and ``@Subscribe`` annotation
-   processor are planned for Part 7. The interfaces and event types in
-   ``vector-api`` are already usable from Java today.
+   The ``VectorJavaPlugin`` base class and a dedicated ``@Subscribe`` annotation
+   processor are not yet shipped. The interfaces and event types in ``vector-api``
+   are already usable from Java today — see the registration examples below.
+   For a fully supported Java plugin experience right now, use the Velocity
+   compatibility layer (``velocity-plugin.json`` manifest, ``language = "JAVA"``),
+   which provides constructor injection and ``@Subscribe`` via the compat shim.
 
 Dependency
 ----------
@@ -122,8 +125,8 @@ types:
 Event Registration from Java
 -----------------------------
 
-The ``EventBus`` interface is Java-friendly. In practice, use the ``@Subscribe``
-annotation (Part 7) which generates the correct adapter automatically:
+The ``EventBus`` interface is Java-friendly. If you use the Velocity compat
+layer, you can also use the ``@Subscribe`` annotation via the shim:
 
 .. code-block:: java
 

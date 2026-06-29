@@ -145,6 +145,10 @@ Built-in Events
      - No
      - ``ClientPlaySessionHandler.disconnected()``
      - ``player: VectorPlayer``
+   * - ``ProxyShutdownEvent``
+     - No
+     - ``VectorServer.stop()`` before plugins are disabled
+     - —
 
 Thread / Coroutine Safety
 --------------------------

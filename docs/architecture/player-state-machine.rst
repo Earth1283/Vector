@@ -30,7 +30,7 @@ State Diagram
 
        Configuration --> InServer : LoginAcknowledged sent\nto backend
 
-       InServer --> Transferring : Plugin initiates\nserver switch (Part 7)
+       InServer --> Transferring : Plugin initiates\nserver switch
        InServer --> [*] : Client disconnected\nor backend disconnected
 
        Transferring --> InServer : New backend ready
@@ -70,6 +70,12 @@ States
    * - **InServer** (backend side)
      - ``BackendPlaySessionHandler``
      - Play phase. Raw packet forwarding — no decode.
+   * - **Limbo**
+     - ``ClientLimboSessionHandler``
+     - No backend available. Player is held on the "Logging in…" screen. The
+       handler retries ``getInitialServer()`` every 5 seconds. After
+       ``limbo.max-hold-duration`` seconds the player is disconnected. Only
+       entered when ``limbo.unclaimed-action = "hold"`` is set in config.
 
 ``MinecraftConnection`` and ``SessionHandler``
 ----------------------------------------------

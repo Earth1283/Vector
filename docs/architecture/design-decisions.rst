@@ -73,7 +73,7 @@ registered at 1.7.2 is therefore valid for every version unless overridden.
 **Trade-offs accepted:** Slightly more complex ``DirectionRegistry`` than a plain
 ``HashMap<Int, Factory>``. The ``TreeMap`` floor-entry overhead is negligible
 compared to packet decode/encode and is mitigated by the ``ConcurrentHashMap``
-lookup cache added in Part 6.
+lookup cache.
 
 Hybrid Netty / Coroutine Dispatcher
 -------------------------------------

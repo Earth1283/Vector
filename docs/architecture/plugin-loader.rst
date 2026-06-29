@@ -146,8 +146,58 @@ After a plugin is instantiated and enabled, ``PluginManager`` holds a
        val manifest: PluginManifest,
        val instance: Any,           // the VectorPlugin subclass instance
        val scope: CoroutineScope,   // SupervisorJob + Dispatchers.Default
+       val classLoader: ClassLoader,// the PluginClassLoader for this JAR
    )
 
 The ``scope`` is the same one passed to ``VectorPluginScope``. If the proxy ever
 needs to unload a plugin, cancelling this scope cancels every coroutine the
-plugin launched.
+plugin launched. The ``classLoader`` is retained so subsystems like Flyway can
+locate classpath resources (e.g. migration SQL files) bundled inside the plugin
+JAR even after the JAR is fully loaded.
+
+Multi-Core Utilization
+-----------------------
+
+.. note::
+
+   **For sysadmins:** Vector fully utilizes multi-core hardware during plugin
+   loading. Unlike older single-threaded proxy loaders, plugins within the same
+   dependency wave are instantiated in **parallel** across all available CPU cores
+   using Kotlin coroutines on ``Dispatchers.Default``.
+
+   ``Dispatchers.Default`` sizes itself to ``availableProcessors`` threads by
+   default. On an 8-core host, up to 8 plugins can be instantiated simultaneously
+   — classloading, JAR scanning, and constructor execution all run concurrently.
+   On a 32-core host, 32 plugins can load in parallel.
+
+   **Practical impact:** A network with 20 independent plugins (no
+   inter-dependencies) loads all 20 in approximately the time it takes to load
+   one, limited only by JAR I/O and classloading overhead. A sequential loader
+   would take 20× longer.
+
+   The dependency ordering guarantee is still fully enforced — plugins in later
+   waves only start after every plugin in earlier waves has been fully
+   instantiated. Parallelism applies *within* a wave, not across waves.
+
+   .. code-block:: text
+
+      # Example: 10 independent plugins on a 4-core machine
+      Wave 1 (10 plugins, 4 CPU cores):
+
+      Core 1: plugin-a  ████████ done
+      Core 2: plugin-b  ██████ done
+      Core 3: plugin-c  ████████████ done
+      Core 4: plugin-d  ███████ done
+      Core 1: plugin-e  ████████ done    # picks up next job
+      Core 2: plugin-f  █████ done
+      Core 3: plugin-g  ████████ done
+      Core 4: plugin-h  ██████ done
+      Core 1: plugin-i  ███████ done
+      Core 2: plugin-j  ████ done
+                        |---------|
+                        Wall time ≈ 3× longest single plugin load
+                        (vs. 10× on a sequential loader)
+
+   To take full advantage of this, avoid declaring ``hard-deps`` on plugins that
+   do not actually need to be initialized first — unnecessary hard dependencies
+   force sequential waves and reduce parallelism.

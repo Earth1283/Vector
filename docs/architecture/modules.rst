@@ -92,7 +92,7 @@ against this module alone (plus ``vector-api-kotlin`` for Kotlin DSL sugar).
      - Parsed plugin descriptor.
    * - ``PluginContainer``
      - ``dev.vector.api.plugin``
-     - Live plugin reference: manifest, instance, scope.
+     - Live plugin reference: manifest, instance, scope, classLoader.
    * - ``PluginLanguage``
      - ``dev.vector.api.plugin``
      - ``KOTLIN | JAVA``

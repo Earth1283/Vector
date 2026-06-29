@@ -27,7 +27,7 @@ The Two Worlds
            PluginHandlers["Plugin event handlers\non&lt;PlayerJoinEvent&gt; { ... }"]
            AuthHTTP["Mojang session auth\nMojangAuth.verify() — HTTP call"]
            PluginLoad["Plugin loading\nPluginManager.loadPlugins()"]
-           DBWork["Database I/O\n(Part 7)"]
+           DBWork["Database I/O\nSQLite via StorageBackend"]
            ScheduledWork["Scheduled plugin tasks\nlaunch { delay(...) }"]
        end
 

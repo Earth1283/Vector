@@ -224,7 +224,7 @@ commands (via the ``command { }`` DSL), they are listed below the built-in secti
      serverctl status <server>            — probe and detail a single backend
      serverctl enable|disable <server>    — add/remove backend from routing pool
      plugins                              — list loaded plugins
-     broadcast <message>                  — broadcast a message (stub)
+     broadcast <message>                  — broadcast a message to all players
      version                              — show version and runtime info
      uptime                               — show how long the proxy has been running
      stop                                 — shut down the proxy gracefully

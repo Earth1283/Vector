@@ -114,8 +114,9 @@ Status Response JSON Schema
    }
 
 The ``version.protocol`` field is negotiated from the client's ``Handshake``
-protocol version. The MOTD DSL (Part 7) will replace the static description
-with a fully configurable Adventure component.
+protocol version. The ``description`` field reflects the value set in
+``motd.description`` in ``vector.toml``; it accepts plain text or an Adventure
+JSON component (a string starting with ``{``).
 
 Login State
 -----------

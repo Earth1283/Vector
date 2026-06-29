@@ -7,10 +7,9 @@ default ``vector.toml`` to the working directory if the file does not exist.
 Current Implemented Config
 --------------------------
 
-This is the full schema **active today** (Parts 1–7.7). The file below is
-what Vector writes to ``vector.toml`` on first start — every option is
-commented in place so the file is self-documenting. You do not need this
-page to configure the proxy; it exists for quick reference.
+The file below is what Vector writes to ``vector.toml`` on first start —
+every option is commented in place so the file is self-documenting. You do
+not need this page to configure the proxy; it exists for quick reference.
 
 .. code-block:: toml
 
@@ -185,6 +184,36 @@ page to configure the proxy; it exists for quick reference.
    # unclaimed-action  = "hold"
    # max-hold-duration = 0   # hold indefinitely until a server comes up
 
+Threading and Multi-Core Utilization
+-------------------------------------
+
+.. note::
+
+   **For sysadmins:** Vector is built to use all available CPU cores. Two
+   separate thread pools work together:
+
+   - **Netty worker threads** (``worker-threads``) handle raw I/O — every
+     active player connection runs on one of these threads. With ``worker-threads = 0``
+     (default auto), Netty sizes this pool to ``availableProcessors × 2``.
+     On a 16-core host this is 32 I/O threads, meaning 32 player packet
+     streams can be decoded/encoded simultaneously.
+
+   - **Kotlin ``Dispatchers.Default``** runs all plugin logic, event handlers,
+     Mojang auth HTTP calls, database queries, and — critically — **plugin
+     loading**. This pool is sized to ``availableProcessors`` by default. On an
+     8-core host, 8 plugins in the same dependency wave instantiate in parallel.
+
+   There is no single-threaded bottleneck during normal operation. The only
+   serialized resource is the SQLite database connection (protected by a
+   ``Mutex``), which is a deliberate trade-off for ACID safety rather than a
+   threading limitation.
+
+   **Practical recommendation:** Leave both ``boss-threads`` and
+   ``worker-threads`` at their defaults (``1`` and ``0`` respectively) on
+   commodity hardware. Increase ``worker-threads`` only if CPU profiling shows
+   the Netty pool saturated — this is unusual below ~1000 concurrent players
+   on a modern multi-core host.
+
 Backend Cooldowns
 -----------------
 
@@ -215,8 +244,8 @@ Choose **modern** for Paper-based backends. Use **bungeeguard** for Spigot/Bukki
 backends. Use **none** only if the backend is completely firewalled from the
 internet.
 
-Planned Config (Part 7.8+)
---------------------------
+Planned Configuration
+---------------------
 
 The sections below are designed but not yet implemented.
 

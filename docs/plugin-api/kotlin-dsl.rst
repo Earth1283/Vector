@@ -205,6 +205,12 @@ After all ``onDisable`` handlers complete:
 3. The plugin's coroutine scope is cancelled (all running ``launch`` / ``every``
    jobs are stopped).
 
+.. note::
+
+   ``onDisable`` fires during a graceful ``stop`` command or JVM shutdown. It
+   does **not** fire if the JVM is killed with ``SIGKILL`` or ``kill -9``. Use
+   the storage backend for data that must survive hard kills.
+
 Plugin Commands
 ---------------
 
@@ -343,6 +349,25 @@ Hard dependencies guarantee the other plugin is fully enabled before yours:
 
 Plugins in the same wave load in parallel; waves are sequential.
 A cycle in the hard-dep graph is a startup error.
+
+PluginContainer
+---------------
+
+After your plugin is loaded, the proxy holds a ``PluginContainer`` with four
+fields:
+
+.. code-block:: kotlin
+
+   data class PluginContainer(
+       val manifest: PluginManifest,    // parsed vector-plugin.toml
+       val instance: Any,               // your VectorPlugin subclass instance
+       val scope: CoroutineScope,       // SupervisorJob + Dispatchers.Default
+       val classLoader: ClassLoader,    // the PluginClassLoader for this JAR
+   )
+
+The ``classLoader`` is used internally by the storage backend's ``migrate()``
+helper to locate your ``db/migration/*.sql`` files on the classpath. You do not
+normally need to reference it directly.
 
 Class Loading
 -------------
