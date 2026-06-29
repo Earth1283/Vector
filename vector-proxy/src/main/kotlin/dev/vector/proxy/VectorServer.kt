@@ -703,6 +703,7 @@ class VectorServer(val config: VectorConfig, val console: ProxyConsole? = null) 
             runBlocking {
                 folderJob.join()
                 pluginManager.loadPlugins(Paths.get("plugins"))
+                eventBus.fire(ProxyInitializeEvent())
             }
 
             val pluginCount = pluginManager.plugins.size
@@ -715,10 +716,6 @@ class VectorServer(val config: VectorConfig, val console: ProxyConsole? = null) 
             val elapsed = Duration.between(startTime, Instant.now())
             val elapsedStr = "${elapsed.seconds}.${(elapsed.nano / 1_000_000).toString().padStart(3, '0')}s"
             logger.info("Vector is ready ({}) — Type 'help' for commands.", elapsedStr)
-
-            proxyScope.launch {
-                eventBus.fire(ProxyInitializeEvent())
-            }
 
             bound.channel().closeFuture().sync()
         } finally {

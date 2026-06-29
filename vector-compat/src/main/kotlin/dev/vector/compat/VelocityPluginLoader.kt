@@ -51,7 +51,11 @@ class VelocityPluginLoader(
         proxyShim.pluginManagerShim.registerPlugin(container)
 
         // auto-register @Subscribe methods from the plugin instance
-        proxyShim.eventManagerShim.register(instance, instance)
+        try {
+            proxyShim.eventManagerShim.register(instance, instance)
+        } catch (e: Throwable) {
+            logger.warn("Failed to register @Subscribe handlers for {}: {}", manifest.id, e.message ?: e.toString())
+        }
 
         logger.info("Enabled legacy Velocity plugin {} v{} by {}",
             description.getName().orElse(manifest.id),
