@@ -113,6 +113,45 @@ class VelocityEventManagerTest {
     }
 
     @Test
+    fun `PostOrder FIRST fires before LAST`() {
+        val mgr = VelocityEventManagerShim(fakeServer)
+        val fired = mutableListOf<String>()
+
+        val plugin = Any()
+        mgr.register(plugin, object {
+            @Subscribe(order = PostOrder.LAST)
+            fun onLast(event: CustomEvent) { fired += "LAST" }
+        })
+        mgr.register(plugin, object {
+            @Subscribe(order = PostOrder.FIRST)
+            fun onFirst(event: CustomEvent) { fired += "FIRST" }
+        })
+
+        mgr.fire(CustomEvent("order")).get()
+        assertEquals(listOf("FIRST", "LAST"), fired)
+    }
+
+    @Test
+    fun `explicit priority overrides PostOrder`() {
+        val mgr = VelocityEventManagerShim(fakeServer)
+        val fired = mutableListOf<String>()
+
+        val plugin = Any()
+        // LAST by PostOrder but explicit priority = -50 should fire before a NORMAL (priority=0) handler.
+        mgr.register(plugin, object {
+            @Subscribe(order = PostOrder.NORMAL)
+            fun onNormal(event: CustomEvent) { fired += "NORMAL" }
+        })
+        mgr.register(plugin, object {
+            @Subscribe(order = PostOrder.LAST, priority = -50)
+            fun onLateButEarly(event: CustomEvent) { fired += "OVERRIDE" }
+        })
+
+        mgr.fire(CustomEvent("priority")).get()
+        assertEquals(listOf("OVERRIDE", "NORMAL"), fired)
+    }
+
+    @Test
     fun `ProxyInitializeEvent is mapped to velocity`() {
         val bus = object : EventBus {
             var handler: (suspend (VectorEvent) -> Unit)? = null

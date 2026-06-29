@@ -20,11 +20,27 @@ class VelocityEventManagerShim(private val vectorServer: ProxyServer) : EventMan
 
     private val logger = LoggerFactory.getLogger(VelocityEventManagerShim::class.java)
 
+    companion object {
+        // Sentinel value meaning "not set — derive from PostOrder instead."
+        private const val PRIORITY_SENTINEL: Short = Short.MIN_VALUE
+
+        // Maps PostOrder to a dispatch priority: lower value fires first.
+        fun postOrderPriority(order: PostOrder): Short = when (order) {
+            PostOrder.FIRST  -> (-128).toShort()
+            PostOrder.EARLY  -> (-64).toShort()
+            PostOrder.NORMAL -> 0
+            PostOrder.LATE   -> 64
+            PostOrder.LAST   -> 127
+            PostOrder.CUSTOM -> 0
+        }
+    }
+
     private data class SubscriberEntry(
         val plugin: Any,
         val listener: Any,
         val method: Method,
-        val order: PostOrder,
+        // Pre-computed at registration; lower value fires first.
+        val effectivePriority: Short,
     )
 
     private data class FunctionalEntry<E>(
@@ -62,27 +78,30 @@ class VelocityEventManagerShim(private val vectorServer: ProxyServer) : EventMan
             .filter { it.isAnnotationPresent(Subscribe::class.java) && it.parameterCount == 1 }
             .forEach { method ->
                 val eventType = method.parameterTypes[0]
-                val order = method.getAnnotation(Subscribe::class.java).order
+                val ann = method.getAnnotation(Subscribe::class.java)
+                // Honor explicit priority; fall back to PostOrder when unset (sentinel = Short.MIN_VALUE).
+                val effectivePriority = if (ann.priority != PRIORITY_SENTINEL) ann.priority
+                                        else postOrderPriority(ann.order)
                 val list = subscribers.getOrPut(eventType) { CopyOnWriteArrayList() }
-                list.add(SubscriberEntry(plugin, listener, method, order))
-                // Re-sort in place so fire() never needs to sort.
-                val sorted = list.sortedBy { it.order.ordinal }
+                list.add(SubscriberEntry(plugin, listener, method, effectivePriority))
+                // Re-sort ascending (lower priority fires first) so fire() never needs to sort.
+                val sorted = list.sortedBy { it.effectivePriority }
                 subscribers[eventType] = CopyOnWriteArrayList(sorted)
-                logger.debug("Registered @Subscribe handler {}.{} for {}",
-                    listener.javaClass.simpleName, method.name, eventType.simpleName)
+                logger.debug("Registered @Subscribe handler {}.{} for {} (priority={})",
+                    listener.javaClass.simpleName, method.name, eventType.simpleName, effectivePriority)
             }
     }
 
     override fun <E : Any> register(plugin: Any, clazz: Class<E>, order: PostOrder, handler: EventHandler<E>) {
-        register(plugin, clazz, order.ordinal.toShort(), handler)
+        register(plugin, clazz, postOrderPriority(order), handler)
     }
 
     override fun <E : Any> register(plugin: Any, clazz: Class<E>, priority: Short, handler: EventHandler<E>) {
         @Suppress("UNCHECKED_CAST")
         val list = (functional.getOrPut(clazz) { CopyOnWriteArrayList() } as CopyOnWriteArrayList<FunctionalEntry<E>>)
         list.add(FunctionalEntry(plugin, handler, priority))
-        // Re-sort descending so fire() never needs to sort.
-        val sorted = list.sortedByDescending { it.priority }
+        // Re-sort ascending (lower priority fires first) so fire() never needs to sort.
+        val sorted = list.sortedBy { it.priority }
         @Suppress("UNCHECKED_CAST")
         functional[clazz] = CopyOnWriteArrayList(sorted) as CopyOnWriteArrayList<FunctionalEntry<*>>
     }
@@ -107,7 +126,7 @@ class VelocityEventManagerShim(private val vectorServer: ProxyServer) : EventMan
 
         @Suppress("UNCHECKED_CAST")
         val fns = functional[eventClass] as? CopyOnWriteArrayList<FunctionalEntry<E>>
-        // Already sorted descending by priority at registration time.
+        // Already sorted ascending by priority at registration time.
         fns?.forEach { fn ->
             try {
                 fn.handler.execute(event)

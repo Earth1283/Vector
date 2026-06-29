@@ -70,7 +70,7 @@ class VelocityEventManagerTests(
             eventMgr.fireAndForget(VecTestEvent("fire-forget"))
         }
 
-        // - PostOrder ordering: LAST fires before FIRST (descending ordinal)
+        // - PostOrder ordering: FIRST fires before LAST (ascending effective priority)
         val order = mutableListOf<String>()
         val listenerA = object : Any() {
             @Subscribe(order = PostOrder.FIRST)
@@ -80,15 +80,15 @@ class VelocityEventManagerTests(
             @Subscribe(order = PostOrder.LAST)
             fun onB(event: VecTestEvent) { order += "LAST" }
         }
-        s.check("EventManager PostOrder — LAST fires before FIRST") {
+        s.check("EventManager PostOrder — FIRST fires before LAST") {
             eventMgr.register(plugin, listenerA)
             eventMgr.register(plugin, listenerB)
             order.clear()
             eventMgr.fire(VecTestEvent("ordering"))
             eventMgr.unregisterListeners(plugin)
-            val lastIdx = order.indexOf("LAST")
             val firstIdx = order.indexOf("FIRST")
-            s.assert(lastIdx < firstIdx, "expected LAST before FIRST, got: $order")
+            val lastIdx = order.indexOf("LAST")
+            s.assert(firstIdx < lastIdx, "expected FIRST before LAST, got: $order")
         }
 
         // - unregisterListener (per listener)
