@@ -10,15 +10,19 @@ import org.jline.reader.LineReaderBuilder
 import org.jline.reader.UserInterruptException
 import org.jline.terminal.Terminal
 import org.jline.terminal.TerminalBuilder
+import org.jline.utils.AttributedStringBuilder
+import org.jline.utils.AttributedStyle
 import org.jline.widget.AutosuggestionWidgets
 import java.io.Closeable
 
-class ProxyConsole(val theme: ConsoleTheme) : Closeable {
+class ProxyConsole(val theme: ConsoleTheme, private val simplePrompt: Boolean = false) : Closeable {
 
     val terminal: Terminal = TerminalBuilder.builder()
         .system(true)
         .name("Vector")
         .build()
+
+    private val prompt: String = selectPrompt(terminal, simplePrompt)
 
     val frecency = FrecencyTracker()
 
@@ -59,7 +63,7 @@ class ProxyConsole(val theme: ConsoleTheme) : Closeable {
         scope.launch(Dispatchers.IO) {
             while (isActive) {
                 val line = try {
-                    reader.readLine(PROMPT)
+                    reader.readLine(prompt)
                 } catch (_: UserInterruptException) {
                     onCommand("stop")
                     break
@@ -87,7 +91,16 @@ class ProxyConsole(val theme: ConsoleTheme) : Closeable {
 
     override fun close() = shutdown()
 
-    companion object {
-        private const val PROMPT = "> "
-    }
+}
+
+private fun selectPrompt(terminal: Terminal, simplePrompt: Boolean): String {
+    val isDumb = terminal.type == "dumb" || terminal.type == "dumb-color"
+    val isUtf  = terminal.encoding().name().uppercase().let { it.contains("UTF") || it.contains("UNICODE") }
+    if (simplePrompt || isDumb || !isUtf) return "> "
+    return AttributedStringBuilder()
+        .style(AttributedStyle.DEFAULT.foreground(AttributedStyle.BRIGHT or AttributedStyle.CYAN).bold())
+        .append("❯")
+        .style(AttributedStyle.DEFAULT)
+        .append(" ")
+        .toAnsi()
 }

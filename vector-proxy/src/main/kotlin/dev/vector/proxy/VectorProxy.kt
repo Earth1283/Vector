@@ -10,7 +10,8 @@ import org.slf4j.LoggerFactory
 private val logger = LoggerFactory.getLogger("Vector")
 
 fun main() {
-    val console = ProxyConsole(defaultTheme())
+    val config = VectorConfig.load()
+    val console = ProxyConsole(defaultTheme(), config.console.simplePrompt)
     JLineAppender.attach(console)
 
     Runtime.getRuntime().addShutdownHook(Thread({
@@ -27,7 +28,6 @@ fun main() {
         else                    -> "NIO (portable fallback)"
     })
 
-    val config = VectorConfig.load()
     val server = VectorServer(config, console)
 
     console.startReadLoop(server.proxyScope) { line ->

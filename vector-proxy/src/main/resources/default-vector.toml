@@ -163,3 +163,10 @@ unclaimed-message   = "No server available."
 max-hold-duration   = 120
 # unclaimed-action  = "hold"
 # max-hold-duration = 0   # hold indefinitely until a server comes up
+
+# Console appearance.
+# simple-prompt - use a plain "> " prompt instead of the Unicode "❯" character.
+#                 Enabled automatically when the terminal reports a non-UTF-8
+#                 encoding or reports itself as a dumb terminal.
+# [console]
+# simple-prompt = true

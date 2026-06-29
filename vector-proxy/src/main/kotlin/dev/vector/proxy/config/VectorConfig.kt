@@ -25,6 +25,7 @@ data class VectorConfig(
     @SerialName("player-experience")
     val playerExperience: PlayerExperienceConfig = PlayerExperienceConfig(),
     val limbo: LimboConfig = LimboConfig(),
+    val console: ConsoleConfig = ConsoleConfig(),
 ) {
     @Serializable
     data class RoutingConfig(
@@ -127,6 +128,11 @@ data class VectorConfig(
         @SerialName("kick") KICK,
         @SerialName("hold") HOLD,
     }
+
+    @Serializable
+    data class ConsoleConfig(
+        @SerialName("simple-prompt") val simplePrompt: Boolean = false,
+    )
 
     companion object {
         private val DEFAULT_TOML: String =
