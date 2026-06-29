@@ -1,5 +1,6 @@
 package dev.vector.proxy.network.session
 
+import dev.vector.api.event.PlayerChatEvent
 import dev.vector.api.event.PlayerLeaveEvent
 import dev.vector.proxy.model.VectorPlayer
 import dev.vector.proxy.network.SessionHandler
@@ -37,23 +38,34 @@ class ClientPlaySessionHandler(private val player: VectorPlayer) : SessionHandle
 
             if (isChat || isCommand) {
                 val message = buf.readString()
-                val commandLine = if (isChat) {
-                    if (message.startsWith("/")) message.substring(1) else null
-                } else {
-                    message
+
+                if (isChat && !message.startsWith("/")) {
+                    // Non-command chat message — fire PlayerChatEvent and optionally suppress
+                    val backend = player.currentBackendConn ?: return false
+                    buf.retain()
+                    player.server.proxyScope.launch {
+                        val event = PlayerChatEvent(player, message)
+                        player.server.eventBus.fire(event)
+                        if (!event.isCancelled && backend.channel.isActive) {
+                            val snapshot = buf.duplicate().readerIndex(readerIndex)
+                            backend.channel.write(snapshot.retain(), backend.channel.voidPromise())
+                        }
+                        buf.release()
+                    }
+                    return true
                 }
 
-                if (commandLine != null) {
-                    val parts = commandLine.trim().split(" ", limit = 2)
-                    val cmdName = parts[0]
-                    val arg = parts.getOrNull(1)
+                val commandLine = if (isChat) message.substring(1) else message
 
-                    if (player.server.hasCommand(cmdName)) {
-                        player.server.proxyScope.launch(dev.vector.compat.currentCommandSender.asContextElement(player.username)) {
-                            player.server.handleCommand(cmdName, arg)
-                        }
-                        return true
+                val parts = commandLine.trim().split(" ", limit = 2)
+                val cmdName = parts[0]
+                val arg = parts.getOrNull(1)
+
+                if (player.server.hasCommand(cmdName)) {
+                    player.server.proxyScope.launch(dev.vector.compat.currentCommandSender.asContextElement(player.username)) {
+                        player.server.handleCommand(cmdName, arg)
                     }
+                    return true
                 }
             }
         } catch (e: Exception) {

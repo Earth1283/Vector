@@ -340,14 +340,15 @@ class VectorServer(val config: VectorConfig, val console: ProxyConsole? = null) 
             logger.info("Stopping proxy (online: {})...", _players.size)
             _players.values.toList().forEach { it.disconnect("Proxy shutting down") }
             
+            val shutdownEvent = dev.vector.api.event.ProxyShutdownEvent()
             try {
-                eventBus.fire(dev.vector.api.event.ProxyShutdownEvent())
+                eventBus.fire(shutdownEvent)
             } catch (e: Exception) {
                 logger.error("Error firing ProxyShutdownEvent: {}", e.message)
             }
 
             if (::pluginManager.isInitialized) {
-                pluginManager.disableAll()
+                pluginManager.disableAll(shutdownEvent)
             }
 
             storage.close()

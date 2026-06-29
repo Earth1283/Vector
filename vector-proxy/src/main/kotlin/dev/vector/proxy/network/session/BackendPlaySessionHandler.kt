@@ -1,11 +1,13 @@
 package dev.vector.proxy.network.session
 
+import dev.vector.api.event.ServerSwitchEvent
 import dev.vector.proxy.config.VectorConfig.BackendDisconnectAction
 import dev.vector.proxy.model.VectorPlayer
 import dev.vector.proxy.network.BackendConnection
 import dev.vector.proxy.network.SessionHandler
 import dev.vector.proxy.protocol.packet.play.PlayDisconnectPacket
 import io.netty.buffer.ByteBuf
+import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 
 class BackendPlaySessionHandler(private val player: VectorPlayer) : SessionHandler {
@@ -26,15 +28,18 @@ class BackendPlaySessionHandler(private val player: VectorPlayer) : SessionHandl
 
         when (cfg.action) {
             BackendDisconnectAction.SEND_TO_FALLBACK -> {
-                val currentServer = player.currentServerInfo?.name
+                val previousServer = player.currentServerInfo
                 val fallback = player.server.config.routing.tryServers
-                    .filter { it != currentServer }
+                    .filter { it != previousServer?.name }
                     .firstNotNullOfOrNull { player.server.serverMap[it] }
 
                 if (fallback != null) {
                     player.connection.setAutoReading(false)
                     player.currentBackendConn = null
                     player.currentServerInfo = null
+                    player.server.proxyScope.launch {
+                        player.server.eventBus.fire(ServerSwitchEvent(player, previousServer, fallback))
+                    }
                     val newBackend = BackendConnection(player, fallback)
                     newBackend.connect {
                         player.connection.closeWith(PlayDisconnectPacket(buildDisconnectJson(cfg.fallbackMessage)))

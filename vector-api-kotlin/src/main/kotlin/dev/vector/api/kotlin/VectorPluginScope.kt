@@ -3,6 +3,7 @@ package dev.vector.api.kotlin
 import dev.vector.api.ProxyServer
 import dev.vector.api.event.EventPriority
 import dev.vector.api.event.ProxyInitializeEvent
+import dev.vector.api.event.ProxyShutdownEvent
 import dev.vector.api.event.VectorEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -11,6 +12,7 @@ import kotlinx.coroutines.launch
 import org.slf4j.Logger
 import kotlin.time.Duration
 
+@VectorDsl
 class VectorPluginScope(
     val server: ProxyServer,
     val logger: Logger,
@@ -19,7 +21,7 @@ class VectorPluginScope(
     internal val classLoader: ClassLoader,
 ) : CoroutineScope by coroutineScope {
 
-    private val disableHandlers = mutableListOf<suspend VectorPluginScope.() -> Unit>()
+    private val disableHandlers = mutableListOf<suspend VectorPluginScope.(ProxyShutdownEvent) -> Unit>()
 
     inline fun <reified T : VectorEvent> on(
         priority: EventPriority = EventPriority.NORMAL,
@@ -33,7 +35,7 @@ class VectorPluginScope(
     fun onEnable(handler: suspend VectorPluginScope.(ProxyInitializeEvent) -> Unit) =
         on(EventPriority.NORMAL, handler)
 
-    fun onDisable(handler: suspend VectorPluginScope.() -> Unit) {
+    fun onDisable(handler: suspend VectorPluginScope.(ProxyShutdownEvent) -> Unit) {
         disableHandlers.add(handler)
     }
 
@@ -62,9 +64,15 @@ class VectorPluginScope(
             }
         }
 
-    internal suspend fun runDisable() {
+    fun after(delay: Duration, block: suspend VectorPluginScope.() -> Unit): Job =
+        launch {
+            delay(delay)
+            block()
+        }
+
+    internal suspend fun runDisable(event: ProxyShutdownEvent) {
         for (handler in disableHandlers) {
-            try { handler() } catch (_: Exception) {}
+            try { handler(event) } catch (_: Exception) {}
         }
     }
 }

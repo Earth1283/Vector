@@ -1,5 +1,7 @@
 package dev.vector.api.kotlin
 
+import dev.vector.api.event.ProxyShutdownEvent
+
 open class VectorPlugin(private val init: VectorPluginScope.() -> Unit) {
     private var pluginScope: VectorPluginScope? = null
 
@@ -8,8 +10,8 @@ open class VectorPlugin(private val init: VectorPluginScope.() -> Unit) {
         scope.init()
     }
 
-    suspend fun disable() {
-        pluginScope?.runDisable()
+    suspend fun disable(event: ProxyShutdownEvent = ProxyShutdownEvent()) {
+        pluginScope?.runDisable(event)
         pluginScope = null
     }
 }

@@ -6,6 +6,7 @@ import java.nio.file.Path
 data class PluginNode(
     val manifest: PluginManifest,
     val jarPath: Path,
+    val isVelocityCompat: Boolean = false,
 )
 
 fun computeWaves(nodes: List<PluginNode>): List<List<PluginNode>> {

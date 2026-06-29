@@ -1,6 +1,8 @@
 package dev.vector.proxy.plugin
 
 import com.akuleshov7.ktoml.Toml
+import dev.vector.api.VectorJavaPlugin
+import dev.vector.api.event.ProxyShutdownEvent
 import dev.vector.api.kotlin.VectorPlugin
 import dev.vector.api.kotlin.VectorPluginScope
 import dev.vector.api.plugin.PluginClassLoader
@@ -60,8 +62,8 @@ class PluginManager(private val server: VectorServer) {
             return
         }
 
-        // Initialize Velocity compatibility layer if we have legacy plugins
-        if (nodes.any { it.manifest.language == dev.vector.api.plugin.PluginLanguage.JAVA }) {
+        // Initialize Velocity compatibility layer only for legacy velocity-plugin.json plugins
+        if (nodes.any { it.isVelocityCompat }) {
             val eventMgr = VelocityEventManagerShim(server)
             val cmdMgr = VelocityCommandManagerShim(server)
             val sched = VelocitySchedulerShim()
@@ -74,7 +76,7 @@ class PluginManager(private val server: VectorServer) {
             for (wave in waves) {
                 wave.map { node ->
                     async(Dispatchers.Default) {
-                        if (node.manifest.language == dev.vector.api.plugin.PluginLanguage.JAVA && velocityProxyShim != null) {
+                        if (node.isVelocityCompat && velocityProxyShim != null) {
                             val loader = VelocityPluginLoader(velocityProxyShim!!, pluginsDir)
                             loader.loadAndEnable(node.jarPath)
                         } else {
@@ -86,7 +88,6 @@ class PluginManager(private val server: VectorServer) {
         }
 
         for (container in _plugins) {
-            if (container.instance !is dev.vector.api.kotlin.VectorPlugin) continue
             enablePlugin(container)
         }
     }
@@ -99,7 +100,7 @@ class PluginManager(private val server: VectorServer) {
                     val entry = jf.getJarEntry("vector-plugin.toml")!!
                     val toml = jf.getInputStream(entry).bufferedReader().readText()
                     val manifest = Toml.decodeFromString<RawManifest>(toml).toManifest()
-                    PluginNode(manifest, jar)
+                    PluginNode(manifest, jar, isVelocityCompat = false)
                 }
                 jf.getJarEntry("velocity-plugin.json") != null -> {
                     val entry = jf.getJarEntry("velocity-plugin.json")!!
@@ -115,7 +116,7 @@ class PluginManager(private val server: VectorServer) {
                         hardDeps = raw.dependencies.filter { !it.optional }.map { it.id },
                         softDeps = raw.dependencies.filter { it.optional }.map { it.id },
                     )
-                    PluginNode(manifest, jar)
+                    PluginNode(manifest, jar, isVelocityCompat = true)
                 }
                 else -> {
                     logger.warn("{} has no plugin manifest, skipping", jar.fileName)
@@ -125,9 +126,9 @@ class PluginManager(private val server: VectorServer) {
         }
     }
 
-    suspend fun disableAll() {
+    suspend fun disableAll(event: ProxyShutdownEvent = ProxyShutdownEvent()) {
         for (container in _plugins.asReversed()) {
-            disablePlugin(container)
+            disablePlugin(container, event)
         }
         _plugins.clear()
         velocityProxyShim?.shutdown()
@@ -153,18 +154,36 @@ class PluginManager(private val server: VectorServer) {
                 logger.info("Enabling plugin {} v{}", manifest.name, manifest.version)
                 instance.enable(VectorPluginScope(server, pluginLogger, manifest.id, scope, classLoader))
             }
-            else -> logger.warn("Plugin {} does not extend VectorPlugin, skipping enable", manifest.id)
+            is VectorJavaPlugin -> {
+                logger.info("Enabling Java plugin {} v{}", manifest.name, manifest.version)
+                instance.initPlugin(server, pluginLogger, manifest.id)
+                try {
+                    instance.onEnable()
+                } catch (e: Exception) {
+                    logger.error("Error in onEnable for {}: {}", manifest.id, e.message)
+                }
+            }
+            else -> logger.warn("Plugin {} is not a recognized plugin type, skipping enable", manifest.id)
         }
     }
 
-    private suspend fun disablePlugin(container: PluginContainer) {
+    private suspend fun disablePlugin(container: PluginContainer, event: ProxyShutdownEvent = ProxyShutdownEvent()) {
         val (manifest, instance, scope) = container
         logger.info("Disabling plugin {} v{}", manifest.name, manifest.version)
-        if (instance is VectorPlugin) {
-            try {
-                instance.disable()
-            } catch (e: Exception) {
-                logger.error("Error in onDisable for {}: {}", manifest.id, e.message)
+        when (instance) {
+            is VectorPlugin -> {
+                try {
+                    instance.disable(event)
+                } catch (e: Exception) {
+                    logger.error("Error in onDisable for {}: {}", manifest.id, e.message)
+                }
+            }
+            is VectorJavaPlugin -> {
+                try {
+                    instance.onDisable()
+                } catch (e: Exception) {
+                    logger.error("Error in onDisable for {}: {}", manifest.id, e.message)
+                }
             }
         }
         server.eventBus.unregisterAll(manifest.id)
